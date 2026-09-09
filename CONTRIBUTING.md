@@ -1,6 +1,6 @@
 # Contributing
 
-Small project, informal process — issues and PRs welcome.
+Small project, informal process. Issues and PRs welcome.
 
 ## Ground rules
 
@@ -9,8 +9,10 @@ Small project, informal process — issues and PRs welcome.
 - `slots(area, n)` must stay a **pure function** (work area + count in, slot
   rectangles out). All state lives in the `state` table; all state changes go
   through `layout_msg`. This is what keeps the geometry testable.
-- Match the existing comment density and style. The header block is the spec —
+- Match the existing comment density and style. The header block is the spec;
   update it when behaviour changes, and add a `CHANGELOG.md` entry.
+- Plain ASCII punctuation in prose and comments: no em or en dashes (use `-`,
+  `,`, `:` or `(...)`). CI enforces this via `tests/no-fancy-dashes.sh`.
 
 ## Tests
 
@@ -23,6 +25,9 @@ lua tests/geometry_spec.lua
 ```
 
 Add a case there for any geometry or ordering change.
+
+`tests/no-fancy-dashes.sh` is the other CI check: it fails if a tracked file
+picks up an em or en dash.
 
 ## Manual check
 

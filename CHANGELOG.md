@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. The format is loosely
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- CI (`.github/workflows/ci.yml`): runs the Lua geometry tests and
+  `tests/no-fancy-dashes.sh`, which fails on any em or en dash in a tracked
+  file.
+
+### Changed
+- Docs and comments now use plain ASCII punctuation only (no em or en dashes).
+
 ## [0.2.0] - 2026-09-08
 
 ### Added
@@ -10,14 +20,14 @@ based on [Keep a Changelog](https://keepachangelog.com/).
   MAIN zone (→ mainstage), the SIDE zone (→ top of the left column) or the
   BOTTOM zone (→ first strip slot); the windows in between shift one step along
   the C. The Lua layout API has no drag event, but a drag pick-up floats the
-  window, so on drop it returns as a fresh tile — any `stable_id` the layout
+  window, so on drop it returns as a fresh tile, and any `stable_id` the layout
   has placed before is treated as a returning drop and placed by zone rather
   than sent to the mainstage. New `state.drag_snap` flag (default on) and
   `dragsnap` / `debug` `layout_msg` toggles.
 
 ### Changed
 - Rebound the along-the-C shuffle from `SUPER+CTRL+L`/`H` to
-  `SUPER+CTRL+DOWN`/`UP` — `SUPER+CTRL+L` is Omarchy's lock-screen shortcut.
+  `SUPER+CTRL+DOWN`/`UP`, since `SUPER+CTRL+L` is Omarchy's lock-screen shortcut.
 
 ## [0.1.0] - 2026-09-08
 
@@ -25,7 +35,7 @@ First release.
 
 ### Added
 - `lua:goldenspiral` custom layout registered through Hyprland's
-  `hl.layout.register` API — no compiled plugin.
+  `hl.layout.register` API, no compiled plugin.
 - **C-wrap slot model**: mainstage on the centre-right; older windows fill a
   left column (`2a` / `2b` / `2c`) and a bottom strip (`3a`, `3b`, …) that
   together wrap the mainstage in a C.
@@ -38,7 +48,7 @@ First release.
 - Minimum tile size (`min_tile_w`): once bottom-strip tiles would get narrower
   than the floor, the strip wraps into extra rows (growing upward, shrinking
   the mainstage) instead of shrinking tiles further.
-- Adaptive behaviour for 2–4 windows: the mainstage runs full height and the
+- Adaptive behaviour for 2-4 windows: the mainstage runs full height and the
   left column stretches to fill.
 - Adjustable proportions via `layout_msg`: `grow` / `shrink` (mainstage width),
   `taller` / `shorter` (bottom-strip height), `reset`, `leftfrac <0.2..0.5>`.

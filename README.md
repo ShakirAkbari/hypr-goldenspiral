@@ -1,6 +1,6 @@
 # goldenspiral tiling layout
 
-A custom [Hyprland](https://hypr.land) tiling layout, written in Lua a non
+A custom [Hyprland](https://hypr.land) tiling layout, written in Lua, not a
 compiled plugin. The window you're working in is a large **mainstage** on the
 centre-right; every other window reflows into a **C** that hugs the mainstage's
 left edge and its bottom edge, in roughly golden-ratio (φ ≈ 1.618) proportion.
@@ -38,13 +38,13 @@ two-tile bottom strip wrapping it into a C.*
    (C's left stroke)    (C's bottom stroke)
 ```
 
-- **Slot 1** — mainstage, right ~62 % wide, ~82 % tall.
-- **Slots 2a / 2b / 2c** — left column, top to bottom (`2c` is the minimum size).
-- **Slots 3a, 3b, …** — bottom strip under the mainstage, equal columns.
+- **Slot 1**: mainstage, right ~62 % wide, ~82 % tall.
+- **Slots 2a / 2b / 2c**: left column, top to bottom (`2c` is the minimum size).
+- **Slots 3a, 3b, …**: bottom strip under the mainstage, equal columns.
   Once a tile would fall below `min_tile_w` the strip wraps into more rows
   (growing upward, shrinking the mainstage) instead of shrinking tiles further.
 
-With 2–4 windows there's no bottom strip: the mainstage runs full height and the
+With 2-4 windows there's no bottom strip: the mainstage runs full height and the
 left column stretches to fill.
 
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the reasoning behind every part of
@@ -90,7 +90,7 @@ binds the controls below.
 | `SUPER + 0` | reset proportions |
 
 Controls go through `hl.dsp.layout("<msg>")`. From a shell the equivalent is
-`hyprctl dispatch 'hl.dsp.layout("promote")'` — the bare
+`hyprctl dispatch 'hl.dsp.layout("promote")'`; the bare
 `hyprctl dispatch layoutmsg promote` form does **not** work on the Lua config.
 
 Available messages: `promote`, `swapnext`, `swapprev`, `grow`, `shrink`,
@@ -99,20 +99,20 @@ Available messages: `promote`, `swapnext`, `swapprev`, `grow`, `shrink`,
 ## Drag and drop
 
 Drag a tiled window with `SUPER + left-mouse` (Omarchy's default move bind) and
-drop it into one of three zones. It goes to the **front** of that zone — no
+drop it into one of three zones. It goes to the **front** of that zone, no
 finer aim than the zone itself:
 
 | Drop zone | Where the window lands |
 | --- | --- |
-| **MAIN** — the mainstage (top-right) | the mainstage (rank 1) |
-| **SIDE** — the whole left column | top of the left column (`2a`) |
-| **BOTTOM** — the strip under the mainstage | the first strip slot |
+| **MAIN**: the mainstage (top-right) | the mainstage (rank 1) |
+| **SIDE**: the whole left column | top of the left column (`2a`) |
+| **BOTTOM**: the strip under the mainstage | the first strip slot |
 
 Everything between the window's old and new rank shifts one step along the C.
 
 Hyprland's Lua layout API exposes no drag or drop event. But a drag *pick-up*
 floats the window, so on drop Hyprland hands it back to the layout as a brand
-new tile — and any window id the layout has placed before is taken to be a
+new tile, and any window id the layout has placed before is taken to be a
 returning drop rather than a new window. Its drop point (window centre) picks
 the zone. A genuinely new window still goes straight to the mainstage.
 
@@ -137,14 +137,14 @@ Edit the `state` table at the top of `goldenspiral.lua`:
 `state.order` is an explicit list of window `stable_id`s, `order[1]` being the
 mainstage. Each `recalculate`:
 
-1. `ranked(ctx)` reconciles that list with the live targets — prunes closed
+1. `ranked(ctx)` reconciles that list with the live targets: prunes closed
    windows, front-inserts genuinely new ones (newest first), and parks any
-   *returning* window (a known id handed back as fresh — i.e. a drop) at the
+   *returning* window (a known id handed back as fresh, i.e. a drop) at the
    end for step 3.
-2. `slots(area, n)` — a pure function — returns `n` slot rectangles in rank
+2. `slots(area, n)`, a pure function, returns `n` slot rectangles in rank
    order for the current work area and window count.
 3. `place_returning` moves each dropped window to the front of its drop zone
-   (`zone_rank` reads the zone from the slot boxes — see
+   (`zone_rank` reads the zone from the slot boxes; see
    [Drag and drop](#drag-and-drop)), then `state.order` is re-materialised.
 4. each window is placed with `target:place(box)`, which applies gaps, reserved
    area and pseudotiling; every placed id is recorded in `state.seen`.
@@ -165,7 +165,7 @@ lua tests/geometry_spec.lua
 ## Credits
 
 Concept, layout geometry, slot model, recency ranking, the minimum-size /
-row-wrap rule and the promote / shuffle interactions — **all designed by
+row-wrap rule and the promote / shuffle interactions are **all designed by
 [Shakir Akbari](https://github.com/ShakirAkbari)**. The Lua implementation was written
 with Claude Code to Shakir's design.
 
