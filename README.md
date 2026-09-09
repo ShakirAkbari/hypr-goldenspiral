@@ -126,7 +126,7 @@ lua tests/geometry_spec.lua
 
 Concept, layout geometry, slot model, recency ranking, the minimum-size /
 row-wrap rule and the promote / shuffle interactions — **all designed by
-[Shakir Akbari](https://github.com/OWNER)**. The Lua implementation was written
+[Shakir Akbari](https://github.com/ShakirAkbari)**. The Lua implementation was written
 with Claude Code to Shakir's design.
 
 ## License

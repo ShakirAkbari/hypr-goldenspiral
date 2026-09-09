@@ -2,7 +2,7 @@
 --
 -- Concept, layout geometry and interaction model designed by Shakir Akbari.
 -- Lua implementation written with Claude Code. MIT licensed.
--- Project: https://github.com/OWNER/hypr-goldenspiral
+-- Project: https://github.com/ShakirAkbari/hypr-goldenspiral
 --
 -- Fixed-slot tiling. The mainstage is the big tile on the center-right; older
 -- windows form a C that hugs the mainstage's left edge and its bottom edge.
