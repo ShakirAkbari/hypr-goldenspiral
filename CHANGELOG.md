@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The format is loosely
 based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.2.0] - 2026-09-08
 
 ### Added
 - Drag-and-drop re-ranking, three zones. Drag a tiled window and drop it in the
