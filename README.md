@@ -5,7 +5,7 @@ compiled plugin. The window you're working in is a large **mainstage** on the
 centre-right; every other window reflows into a **C** that hugs the mainstage's
 left edge and its bottom edge, in roughly golden-ratio (φ ≈ 1.618) proportion.
 
-Opening a window promotes it to the mainstage and pushes everyone else one slot
+Opening a window promotes it to the mainstage and pushes other apps one slot
 down the C. This is the key departure from dwindle: a new window lands in the
 **biggest** tile, not a fresh half-of-a-half. You always get full room to work
 in whatever you just opened, and the windows you're not touching are the ones
