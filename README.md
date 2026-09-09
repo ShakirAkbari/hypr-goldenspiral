@@ -10,6 +10,13 @@ down the C. The whole layout recomputes on every add / remove / re-rank, so the
 arrangement always reflects the current window order rather than wherever a
 split-tree happened to branch.
 
+It's a mix of two of Hyprland's stock layouts. From **master** (specifically
+center-master) it takes the idea of one dominant tile that everything else
+orbits — here the mainstage. From **dwindle** it takes the tree-style recursive
+subdivision of the leftover space: the C is the leftover area split down and
+then across, the same "keep halving what's left" move dwindle makes, just driven
+by an explicit recency order instead of a persistent split tree.
+
 ![goldenspiral with six windows](screenshots/goldenspiral.png)
 
 *Six windows: OBS on the mainstage, a left column of three (`2a`/`2b`/`2c`) and a
