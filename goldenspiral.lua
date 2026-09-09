@@ -13,9 +13,11 @@
 --
 -- Drag-and-drop: Hyprland's Lua layout API has no drag hook, so this is a
 -- heuristic. On a reflow where nothing was added or removed and exactly one
--- window has been carried well clear of its slot, that window is re-ranked into
--- whichever slot centre is nearest the drop point; everything between its old
--- and new rank shifts one step along the C. Toggle with the `dragsnap` msg.
+-- window has been carried well clear of its slot, that window is re-ranked.
+-- Dropping onto the mainstage or the left column (ranks 1..4) lands there
+-- exactly; a drop anywhere else goes to the front of the bottom strip.
+-- Everything between the old and new rank shifts one step along the C.
+-- Toggle with the `dragsnap` msg.
 --
 -- Slots, in rank order (1 = mainstage):
 --   1            mainstage           right ~62% wide, ~82% tall
@@ -45,10 +47,10 @@ local state = {
 }
 
 -- A move counts as a drop (not jitter) once the window's centre lands at least
--- this far from where we last placed it, or 8% of the screen diagonal,
+-- this far from where we last placed it, or 5% of the screen diagonal,
 -- whichever is larger.
-local DRAG_SNAP_MIN_PX  = 120
-local DRAG_SNAP_MIN_FRAC = 0.08
+local DRAG_SNAP_MIN_PX   = 120
+local DRAG_SNAP_MIN_FRAC = 0.05
 
 local function clamp(x, lo, hi)
   return math.max(lo, math.min(hi, x))
@@ -193,11 +195,18 @@ local function box_center(b)
   return b.x + b.w * 0.5, b.y + b.h * 0.5
 end
 
+local function point_in(b, x, y)
+  return x >= b.x and x < b.x + b.w and y >= b.y and y < b.y + b.h
+end
+
 -- Heuristic drag-and-drop. If the id set is unchanged since the last placement
 -- and exactly one window has been carried well away from its slot, treat that
--- as a drop: re-rank the window into the slot whose centre is nearest the drop
--- point, shifting everything between its old and new rank one step along the C.
--- Returns true if state.order changed.
+-- as a drop. The big slots -- mainstage and left column, ranks 1..4 -- are
+-- hit-tested, so dropping onto one lands there exactly. A drop anywhere else
+-- (the bottom strip, or off the edge) just sends the window to the front of
+-- the strip; picking a precise strip tile isn't worth it. Everything between
+-- the window's old and new rank shifts one step along the C. Returns true if
+-- state.order changed.
 local function apply_drop_snap(ctx, order, boxes)
   if not state.drag_snap or #order < 2 then
     return false
@@ -240,28 +249,29 @@ local function apply_drop_snap(ctx, order, boxes)
     return false
   end
 
-  -- slot whose centre is closest to where the window was dropped
-  local best_j, best_d
-  for j = 1, #boxes do
-    local bx, by = box_center(boxes[j])
-    local d = (bx - mcx) ^ 2 + (by - mcy) ^ 2
-    if not best_d or d < best_d then
-      best_d, best_j = d, j
+  -- hit-test the big slots; fall back to the front of the strip
+  local n = #order
+  local target
+  for j = 1, math.min(4, n) do
+    if boxes[j] and point_in(boxes[j], mcx, mcy) then
+      target = j
+      break
     end
   end
+  target = target or math.min(5, n)
 
   local cur = index_of(state.order, moved)
-  if not cur or not best_j or cur == best_j then
+  if not cur or cur == target then
     return false
   end
 
   table.remove(state.order, cur)
-  table.insert(state.order, best_j, moved)
+  table.insert(state.order, target, moved)
 
   if state.debug then
     pcall(function()
       hl.notification.create({
-        text = string.format("goldenspiral drop-snap: slot %d -> %d", cur, best_j),
+        text = string.format("goldenspiral drop-snap: slot %d -> %d", cur, target),
         timeout = 1500,
       })
     end)

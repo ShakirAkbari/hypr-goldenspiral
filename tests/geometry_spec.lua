@@ -140,54 +140,94 @@ do
   check("2 windows: other window fills the left column", box_of(c, 1).h >= AREA.h - 1)
 end
 
--- 7. drag-and-drop: a window carried onto another slot is re-ranked there
-do
-  -- ctx whose place() also updates window.at/.size, so the next recalculate
-  -- sees each window where we last put it (like Hyprland does).
-  local function dctx(ids)
-    local targets = {}
-    for i, id in ipairs(ids) do
-      local t = {
-        index  = i,
-        window = { stable_id = id, active = false,
-                   at = { x = -1e4, y = -1e4 }, size = { x = 100, y = 100 } },
-      }
-      t.place = function(self, box)
-        self.placed      = box
-        self.window.at   = { x = box.x, y = box.y }
-        self.window.size = { x = box.w, y = box.h }
-      end
-      targets[i] = t
+-- ctx whose place() also updates window.at/.size, so the next recalculate sees
+-- each window where we last put it (like Hyprland does). Used by the drag tests.
+local function dctx(ids)
+  local targets = {}
+  for i, id in ipairs(ids) do
+    local t = {
+      index  = i,
+      window = { stable_id = id, active = false,
+                 at = { x = -1e4, y = -1e4 }, size = { x = 100, y = 100 } },
+    }
+    t.place = function(self, box)
+      self.placed      = box
+      self.window.at   = { x = box.x, y = box.y }
+      self.window.size = { x = box.w, y = box.h }
     end
-    return { area = AREA, targets = targets }
+    targets[i] = t
   end
+  return { area = AREA, targets = targets }
+end
 
-  local c = dctx({ 1, 2, 3, 4, 5 })
-  L.recalculate(c)                          -- order {5,4,3,2,1}, all placed
-  check("drop: 5 starts on the mainstage", mainstage_id(c) == 5)
-
-  -- "pick up" id 1 (a bottom-strip tile) and let go over the mainstage
+-- move a window's reported geometry, as if the user dragged it there
+local function drag_to(c, id, cx, cy, w, h)
+  w, h = w or 360, h or 240
   for _, t in ipairs(c.targets) do
-    if t.window.stable_id == 1 then
-      t.window.at   = { x = AREA.w * 0.60, y = AREA.h * 0.20 }
-      t.window.size = { x = 400, y = 300 }
+    if t.window.stable_id == id then
+      t.window.at   = { x = cx - w / 2, y = cy - h / 2 }
+      t.window.size = { x = w, y = h }
     end
   end
-  L.recalculate(c)
-  check("drop: dropped window took the mainstage", mainstage_id(c) == 1)
-  check("drop: old mainstage (5) shifted into the left column", box_of(c, 5).x < 1)
+end
 
-  -- a tiny nudge must NOT re-rank anything
-  local d = dctx({ 10, 11, 12, 13, 14 })
+-- 7. drop onto a big slot: hit-tested, lands there exactly.
+-- Fresh, high stable_ids so the initial rank order is deterministic regardless
+-- of what earlier tests left in state.order.
+do
+  local c = dctx({ 21, 22, 23, 24, 25 })
+  L.recalculate(c)                          -- order {25,24,23,22,21}
+  check("drop on mainstage: 25 starts on the mainstage", mainstage_id(c) == 25)
+
+  -- pick up id 21 (a bottom-strip tile) and let go over the mainstage
+  drag_to(c, 21, AREA.w * 0.62, AREA.h * 0.30)
+  L.recalculate(c)
+  check("drop on mainstage: dropped window took the mainstage", mainstage_id(c) == 21)
+  check("drop on mainstage: old mainstage (25) shifted into the left column",
+    box_of(c, 25).x < 1)
+
+  -- drop a window onto the middle of the left column (the 2b slot)
+  local c2 = dctx({ 31, 32, 33, 34, 35 })
+  L.recalculate(c2)                         -- order {35,34,33,32,31}
+  drag_to(c2, 35, AREA.w * 0.10, AREA.h * 0.5) -- left column, vertically centred
+  L.recalculate(c2)
+  local b35 = box_of(c2, 35)
+  check("drop on left column: window is in the left column now", b35.x < 1)
+  check("drop on left column: it took the middle slot (2b)",
+    b35.y > AREA.h * 0.2 and b35.y < AREA.h * 0.7)
+end
+
+-- 8. drop below the big slots: goes to the FRONT of the strip, no fine guess
+do
+  local c = dctx({ 41, 42, 43, 44, 45, 46, 47 })
+  L.recalculate(c)                          -- order {47,46,45,44,43,42,41}
+  -- ranks 5,6,7 are the strip = ids 43,42,41 across three columns
+  local strip_x0 = box_of(c, 43).x         -- first strip column
+  check("strip drop: 43 starts in the first strip column",
+    strip_x0 > AREA.w * 0.382 - 1 and box_of(c, 43).y > AREA.h * 0.5)
+
+  -- drag id 41 (rank 7, last strip tile) somewhere low; exact spot irrelevant
+  drag_to(c, 41, AREA.w * 0.5, AREA.h * 0.97, 300, 60)
+  L.recalculate(c)
+  check("strip drop: dropped window is now the first strip tile",
+    math.abs(box_of(c, 41).x - strip_x0) < 1 and box_of(c, 41).y > AREA.h * 0.5)
+  check("strip drop: the old first strip tile (43) moved one column right",
+    box_of(c, 43).x > strip_x0 + 1)
+  check("strip drop: mainstage is untouched", mainstage_id(c) == 47)
+end
+
+-- 9. a tiny nudge must NOT re-rank anything
+do
+  local d = dctx({ 51, 52, 53, 54, 55 })
   L.recalculate(d)
   local ms = mainstage_id(d)
   for _, t in ipairs(d.targets) do
-    if t.window.stable_id == 11 then
+    if t.window.stable_id == 52 then
       t.window.at = { x = t.window.at.x + 12, y = t.window.at.y + 8 }
     end
   end
   L.recalculate(d)
-  check("drop: a 12px nudge does not re-rank", mainstage_id(d) == ms)
+  check("nudge: a 12px nudge does not re-rank", mainstage_id(d) == ms)
 end
 
 ------------------------------------------------------------------ result

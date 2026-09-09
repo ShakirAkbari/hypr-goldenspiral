@@ -99,17 +99,23 @@ Available messages: `promote`, `swapnext`, `swapprev`, `grow`, `shrink`,
 ## Drag and drop
 
 Drag a tiled window with `SUPER + left-mouse` (Omarchy's default move bind) and
-drop it over another slot — it takes that slot's rank and the windows between
-its old and new rank shift one step along the C.
+drop it:
+
+- **onto the mainstage or the left column** → it lands in that exact slot;
+- **anywhere else** (the bottom strip, or off the screen) → it goes to the
+  front of the strip.
+
+The windows between its old and new rank shift one step along the C.
 
 Hyprland's Lua layout API exposes no drag or drop event, so this is a
 heuristic: on a reflow where no window was added or removed and exactly one
-window's centre has moved more than `max(120px, 8% of the screen diagonal)`
-from where the layout last placed it, that window is treated as dropped and
-re-ranked to the slot whose centre is nearest the drop point. It can't tell a
-drop from any other large single-window jump, so it's approximate near slot
-boundaries. Turn it off with the `dragsnap` message; `debug` toggles a
-notification on each detected drop.
+window's centre has moved more than `max(120px, 5% of the screen diagonal)`
+from where the layout last placed it, that window is treated as dropped. The
+big slots (ranks 1–4) are hit-tested so a deliberate drop onto one is exact;
+everything past them is treated as "just put it at the front of the small
+window line" rather than guessing a strip tile. It can't tell a drop from any
+other large single-window jump. Turn it off with the `dragsnap` message;
+`debug` toggles a notification on each detected drop.
 
 ## Tuning
 

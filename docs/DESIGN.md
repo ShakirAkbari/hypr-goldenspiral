@@ -76,17 +76,29 @@ placed in (`state.placed`). On the next `recalculate`, if
 
 - no window was added or removed since that placement, **and**
 - exactly one window's centre is now more than
-  `max(120px, 8% of the screen diagonal)` from its recorded box,
+  `max(120px, 5% of the screen diagonal)` from its recorded box,
 
-that window is taken to have been dragged. It is re-ranked into the slot whose
-centre is nearest its current (drop) position, and `state.order` shifts
-everything between the old and new rank by one.
+that window is taken to have been dragged, and re-ranked:
+
+- **mainstage or left column** (ranks 1–4) — the drop point is hit-tested
+  against those four slot rectangles; a hit re-ranks the window straight into
+  that slot. These are the slots where landing in the *right* one matters.
+- **anything else** — the bottom strip, or a point off every slot — the window
+  goes to rank 5, the front of the strip. Past the big slots the order of the
+  "small window line" is not worth aiming at; "most recent goes first" is the
+  whole rule.
+
+`state.order` then shifts everything between the window's old and new rank by
+one.
+
+An earlier version snapped to the *nearest slot centre* instead. That failed:
+the mainstage rectangle is so much larger than the others that its centre is
+the closest one for most of the screen, so nearly every drop promoted to the
+mainstage. Hit-testing the actual rectangles fixed it.
 
 Limitations, by construction:
 
 - It cannot distinguish a drop from any other large single-window move.
-- "Nearest slot centre" is coarse near slot boundaries — a drop aimed between
-  `2b` and `2c` can land in either.
 - Two windows moving at once (e.g. a proportion change) is ignored, which is
   what keeps `grow` / `taller` / etc. from tripping it.
 
