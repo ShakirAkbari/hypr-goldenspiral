@@ -74,7 +74,7 @@ binds the controls below.
 | Key | Action |
 | --- | --- |
 | `SUPER + M` | promote the focused window to the mainstage |
-| `SUPER + CTRL + L` / `H` | move the focused window down / up the C |
+| `SUPER + CTRL + DOWN` / `UP` | move the focused window down / up the C |
 | `SUPER + =` / `-` | widen / narrow the mainstage |
 | `SUPER + [` / `]` | grow / shrink the bottom strip |
 | `SUPER + 0` | reset proportions |

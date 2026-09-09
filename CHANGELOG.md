@@ -26,5 +26,5 @@ First release.
   left column stretches to fill.
 - Adjustable proportions via `layout_msg`: `grow` / `shrink` (mainstage width),
   `taller` / `shorter` (bottom-strip height), `reset`, `leftfrac <0.2..0.5>`.
-- Default keybinds: `SUPER+M`, `SUPER+CTRL+L/H`, `SUPER+=`/`-`, `SUPER+[`/`]`,
-  `SUPER+0`.
+- Default keybinds: `SUPER+M`, `SUPER+CTRL+DOWN`/`UP`, `SUPER+=`/`-`,
+  `SUPER+[`/`]`, `SUPER+0`.

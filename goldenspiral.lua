@@ -241,8 +241,8 @@ hl.config({
 -- Controls. hl.dsp.layout(msg) sends the string to this layout's layout_msg
 -- (the same path Omarchy uses for hl.dsp.layout("togglesplit")).
 o.bind("SUPER + M", "Spiral: promote focused to mainstage", hl.dsp.layout("promote"))
-o.bind("SUPER + CTRL + L", "Spiral: move window down the C", hl.dsp.layout("swapnext"))
-o.bind("SUPER + CTRL + H", "Spiral: move window up the C", hl.dsp.layout("swapprev"))
+o.bind("SUPER + CTRL + DOWN", "Spiral: move window down the C", hl.dsp.layout("swapnext"))
+o.bind("SUPER + CTRL + UP", "Spiral: move window up the C", hl.dsp.layout("swapprev"))
 o.bind("SUPER + EQUAL", "Spiral: widen mainstage", hl.dsp.layout("grow"))
 o.bind("SUPER + MINUS", "Spiral: narrow mainstage", hl.dsp.layout("shrink"))
 o.bind("SUPER + BRACKETRIGHT", "Spiral: shrink bottom strip", hl.dsp.layout("taller"))
