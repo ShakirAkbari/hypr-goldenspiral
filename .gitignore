@@ -1,0 +1,8 @@
+# Hyprland keeps timestamped backups next to config files
+*.bak
+*.bak.*
+
+# editor / OS noise
+*~
+.DS_Store
+.luarc.json
