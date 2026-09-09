@@ -1,6 +1,6 @@
 # goldenspiral
 
-A custom [Hyprland](https://hypr.land) tiling layout, written in Lua — no
+A custom [Hyprland](https://hypr.land) tiling layout, written in Lua a no
 compiled plugin. The window you're working in is a large **mainstage** on the
 centre-right; every other window reflows into a **C** that hugs the mainstage's
 left edge and its bottom edge, in roughly golden-ratio (φ ≈ 1.618) proportion.
