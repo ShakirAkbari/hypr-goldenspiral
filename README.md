@@ -1,6 +1,6 @@
 # goldenspiral tiling layout
 
-A custom [Hyprland](https://hypr.land) tiling layout, written in Lua — no
+A custom [Hyprland](https://hypr.land) tiling layout, written in Lua a non
 compiled plugin. The window you're working in is a large **mainstage** on the
 centre-right; every other window reflows into a **C** that hugs the mainstage's
 left edge and its bottom edge, in roughly golden-ratio (φ ≈ 1.618) proportion.
@@ -15,7 +15,7 @@ split-tree happened to branch.
 
 It's a mix of two of Hyprland's stock layouts. From **master** (specifically
 center-master) it takes the idea of one dominant tile that everything else
-orbits — here the mainstage. From **dwindle** it takes the tree-style recursive
+orbits. From **dwindle** it takes the tree-style recursive
 subdivision of the leftover space: the C is the leftover area split down and
 then across, the same "keep halving what's left" move dwindle makes, just driven
 by an explicit recency order instead of a persistent split tree.
