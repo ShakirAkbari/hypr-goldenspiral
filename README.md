@@ -15,10 +15,10 @@ split-tree happened to branch.
 
 It's a mix of two of Hyprland's stock layouts. From **master** (specifically
 center-master) it takes the idea of one dominant tile that everything else
-orbits — here the mainstage. From **dwindle** it takes the tree-style recursive
+orbits here the mainstage. From **dwindle** it takes the tree-style recursive
 subdivision of the leftover space: the C is the leftover area split down and
 then across, the same "keep halving what's left" move dwindle makes, just driven
-by an explicit recency order instead of a persistent split tree.
+by an explicit recency order instead of a persistent split tree. 
 
 ![goldenspiral with six windows](screenshots/goldenspiral.png)
 
