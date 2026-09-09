@@ -8,8 +8,14 @@
 -- windows form a C that hugs the mainstage's left edge and its bottom edge.
 -- A new window takes the mainstage and pushes everyone else one slot down the
 -- C. The order is tracked explicitly, so windows can be re-ranked at runtime
--- (promote to mainstage, shuffle along the C). The whole layout reflows on
--- every add/remove/re-rank.
+-- (promote to mainstage, shuffle along the C, or drag a window and drop it on
+-- another slot). The whole layout reflows on every add/remove/re-rank.
+--
+-- Drag-and-drop: Hyprland's Lua layout API has no drag hook, so this is a
+-- heuristic. On a reflow where nothing was added or removed and exactly one
+-- window has been carried well clear of its slot, that window is re-ranked into
+-- whichever slot centre is nearest the drop point; everything between its old
+-- and new rank shifts one step along the C. Toggle with the `dragsnap` msg.
 --
 -- Slots, in rank order (1 = mainstage):
 --   1            mainstage           right ~62% wide, ~82% tall
@@ -31,7 +37,18 @@ local state = {
                        -- (fraction of the work-area width); extra windows
                        -- wrap into more rows instead of shrinking further.
   order       = {},    -- list of window stable_ids, order[1] = mainstage
+  placed      = {},    -- stable_id -> the box we last placed that window in,
+                       -- so a drop can be told apart from a normal reflow
+  placed_n    = 0,     -- window count at the last placement
+  drag_snap   = true,  -- on drop, re-rank the window to the nearest slot
+  debug       = false, -- notify on each detected drop-snap
 }
+
+-- A move counts as a drop (not jitter) once the window's centre lands at least
+-- this far from where we last placed it, or 8% of the screen diagonal,
+-- whichever is larger.
+local DRAG_SNAP_MIN_PX  = 120
+local DRAG_SNAP_MIN_FRAC = 0.08
 
 local function clamp(x, lo, hi)
   return math.max(lo, math.min(hi, x))
@@ -172,6 +189,86 @@ local function slots(a, n)
   return out
 end
 
+local function box_center(b)
+  return b.x + b.w * 0.5, b.y + b.h * 0.5
+end
+
+-- Heuristic drag-and-drop. If the id set is unchanged since the last placement
+-- and exactly one window has been carried well away from its slot, treat that
+-- as a drop: re-rank the window into the slot whose centre is nearest the drop
+-- point, shifting everything between its old and new rank one step along the C.
+-- Returns true if state.order changed.
+local function apply_drop_snap(ctx, order, boxes)
+  if not state.drag_snap or #order < 2 then
+    return false
+  end
+
+  -- the placement baseline must cover exactly this set of windows
+  local n_live = 0
+  for _, t in ipairs(order) do
+    if t.window then
+      n_live = n_live + 1
+      if not state.placed[t.window.stable_id] then
+        return false
+      end
+    end
+  end
+  if n_live ~= state.placed_n then
+    return false
+  end
+
+  local diag      = math.sqrt(ctx.area.w * ctx.area.w + ctx.area.h * ctx.area.h)
+  local threshold = math.max(DRAG_SNAP_MIN_PX, diag * DRAG_SNAP_MIN_FRAC)
+
+  local moved, mcx, mcy, moved_count = nil, 0, 0, 0
+  for _, t in ipairs(order) do
+    local w = t.window
+    if w then
+      local at, sz = w.at, w.size
+      if not (at and sz) then
+        return false -- a window without live geometry; sit this reflow out
+      end
+      local cx, cy = at.x + sz.x * 0.5, at.y + sz.y * 0.5
+      local px, py = box_center(state.placed[w.stable_id])
+      if math.sqrt((cx - px) ^ 2 + (cy - py) ^ 2) > threshold then
+        moved, mcx, mcy = w.stable_id, cx, cy
+        moved_count = moved_count + 1
+      end
+    end
+  end
+  if moved_count ~= 1 then
+    return false
+  end
+
+  -- slot whose centre is closest to where the window was dropped
+  local best_j, best_d
+  for j = 1, #boxes do
+    local bx, by = box_center(boxes[j])
+    local d = (bx - mcx) ^ 2 + (by - mcy) ^ 2
+    if not best_d or d < best_d then
+      best_d, best_j = d, j
+    end
+  end
+
+  local cur = index_of(state.order, moved)
+  if not cur or not best_j or cur == best_j then
+    return false
+  end
+
+  table.remove(state.order, cur)
+  table.insert(state.order, best_j, moved)
+
+  if state.debug then
+    pcall(function()
+      hl.notification.create({
+        text = string.format("goldenspiral drop-snap: slot %d -> %d", cur, best_j),
+        timeout = 1500,
+      })
+    end)
+  end
+  return true
+end
+
 hl.layout.register("goldenspiral", {
   recalculate = function(ctx)
     local order = ranked(ctx)
@@ -181,15 +278,30 @@ hl.layout.register("goldenspiral", {
     end
     if n == 1 then
       order[1]:place(ctx.area)
+      state.placed = {}
+      if order[1].window then
+        state.placed[order[1].window.stable_id] = ctx.area
+      end
+      state.placed_n = n
       return
     end
 
     local boxes = slots(ctx.area, n)
+
+    if apply_drop_snap(ctx, order, boxes) then
+      order = ranked(ctx) -- re-materialise targets in the new rank order
+    end
+
+    state.placed = {}
     for i = 1, n do
       if boxes[i] then
         order[i]:place(boxes[i])
+        if order[i].window then
+          state.placed[order[i].window.stable_id] = boxes[i]
+        end
       end
     end
+    state.placed_n = n
   end,
 
   layout_msg = function(ctx, msg)
@@ -222,9 +334,13 @@ hl.layout.register("goldenspiral", {
       state.left_frac, state.bottom_frac, state.top_split = 0.382, 0.18, 0.41
     elseif cmd == "leftfrac" then
       state.left_frac = clamp(tonumber(arg) or state.left_frac, 0.2, 0.5)
+    elseif cmd == "dragsnap" then -- toggle drag-and-drop re-ranking
+      state.drag_snap = not state.drag_snap
+    elseif cmd == "debug" then
+      state.debug = not state.debug
     else
       return "goldenspiral: expected promote, swapnext, swapprev, grow, shrink, "
-        .. "taller, shorter, reset, or leftfrac <0.2..0.5>"
+        .. "taller, shorter, reset, leftfrac <0.2..0.5>, dragsnap, or debug"
     end
 
     return true

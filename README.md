@@ -94,7 +94,22 @@ Controls go through `hl.dsp.layout("<msg>")`. From a shell the equivalent is
 `hyprctl dispatch layoutmsg promote` form does **not** work on the Lua config.
 
 Available messages: `promote`, `swapnext`, `swapprev`, `grow`, `shrink`,
-`taller`, `shorter`, `reset`, `leftfrac <0.2..0.5>`.
+`taller`, `shorter`, `reset`, `leftfrac <0.2..0.5>`, `dragsnap`, `debug`.
+
+## Drag and drop
+
+Drag a tiled window with `SUPER + left-mouse` (Omarchy's default move bind) and
+drop it over another slot — it takes that slot's rank and the windows between
+its old and new rank shift one step along the C.
+
+Hyprland's Lua layout API exposes no drag or drop event, so this is a
+heuristic: on a reflow where no window was added or removed and exactly one
+window's centre has moved more than `max(120px, 8% of the screen diagonal)`
+from where the layout last placed it, that window is treated as dropped and
+re-ranked to the slot whose centre is nearest the drop point. It can't tell a
+drop from any other large single-window jump, so it's approximate near slot
+boundaries. Turn it off with the `dragsnap` message; `debug` toggles a
+notification on each detected drop.
 
 ## Tuning
 
@@ -106,6 +121,7 @@ Edit the `state` table at the top of `goldenspiral.lua`:
 | `bottom_frac` | `0.18` | bottom-strip row height as a fraction of the work area |
 | `top_split` | `0.41` | height of `2a` and of `2b` (`2c` gets the remainder) |
 | `min_tile_w` | `0.16` | bottom-strip tiles never get narrower than this; extra windows wrap to new rows |
+| `drag_snap` | `true` | re-rank a window to the nearest slot when it's dragged and dropped |
 
 ## How it works
 
@@ -116,11 +132,14 @@ mainstage. Each `recalculate`:
    windows, front-inserts new ones (newest first).
 2. `slots(area, n)` — a pure function — returns `n` slot rectangles in rank
    order for the current work area and window count.
-3. each window is placed with `target:place(box)`, which applies gaps, reserved
-   area and pseudotiling.
+3. `apply_drop_snap` compares each window's live position against the box it was
+   last placed in; a lone large mover is re-ranked to the nearest slot (see
+   [Drag and drop](#drag-and-drop)).
+4. each window is placed with `target:place(box)`, which applies gaps, reserved
+   area and pseudotiling, and the box is recorded for the next drop check.
 
 `layout_msg` mutates `state.order` (`promote` / `swapnext` / `swapprev`) or the
-`state` proportions, and returns `true` to trigger a re-layout.
+`state` flags and proportions, and returns `true` to trigger a re-layout.
 
 ## Tests
 

@@ -58,10 +58,48 @@ slot.
   back to the front" gesture.
 - **`swapnext` / `swapprev`** → swap the focused window with its neighbour in
   the order, to hand-tune which peripheral slot something sits in.
+- **Drag and drop** → drop a window over another slot and it takes that slot's
+  rank, the windows in between shifting one step (see below).
 - **Closed window** → pruned from `order`; everything below it shifts up.
 
 Ranking is kept as an explicit list rather than derived purely from window age
 so that `promote` and the shuffles are possible at all.
+
+## Drag and drop (a heuristic)
+
+The Lua layout API (`recalculate` + `layout_msg`, Hyprland 0.56.x) has **no**
+drag, drop, mouse, or window-event hook. A custom layout is told nothing about
+a drag; it only sees the target list and gets asked to recalculate.
+
+So a drop is *inferred*. Every `recalculate` records the box each window was
+placed in (`state.placed`). On the next `recalculate`, if
+
+- no window was added or removed since that placement, **and**
+- exactly one window's centre is now more than
+  `max(120px, 8% of the screen diagonal)` from its recorded box,
+
+that window is taken to have been dragged. It is re-ranked into the slot whose
+centre is nearest its current (drop) position, and `state.order` shifts
+everything between the old and new rank by one.
+
+Limitations, by construction:
+
+- It cannot distinguish a drop from any other large single-window move.
+- "Nearest slot centre" is coarse near slot boundaries — a drop aimed between
+  `2b` and `2c` can land in either.
+- Two windows moving at once (e.g. a proportion change) is ignored, which is
+  what keeps `grow` / `taller` / etc. from tripping it.
+
+`state.drag_snap` (default `true`, toggled by the `dragsnap` message) turns the
+whole thing off. `debug` toggles a notification showing each detected re-rank.
+
+### What is *not* possible
+
+Drag-to-screen-edge gestures — e.g. fling a window at the top edge to
+fullscreen it, drag it back down to re-tile — would need a drag/pointer hook
+the layout API does not provide. The only route is an external process polling
+`hyprctl cursorpos` with no real drag start/stop signal, which is not worth
+building.
 
 ## Minimum size instead of infinite shrink
 
@@ -82,9 +120,13 @@ left column stretches (one half-height tile at 3 windows, the 2a/2b/2c split at
 - `ranked(ctx)` — reconcile `state.order` with live targets, return them ordered.
 - `slots(area, n)` — pure function: given the work area and a count, return `n`
   slot rectangles in rank order.
-- `recalculate(ctx)` — `ranked` → `slots` → `target:place(box)` per window.
-- `layout_msg(ctx, msg)` — mutate `state` (order or proportions), return `true`
-  to trigger a re-layout.
+- `apply_drop_snap(ctx, order, boxes)` — infer a drag-and-drop from window
+  geometry and re-rank the dropped window; returns `true` if `state.order`
+  changed.
+- `recalculate(ctx)` — `ranked` → `slots` → `apply_drop_snap` → `target:place`
+  per window, recording each placement for the next drop check.
+- `layout_msg(ctx, msg)` — mutate `state` (order, flags or proportions), return
+  `true` to trigger a re-layout.
 
 Keeping `slots()` pure makes the geometry easy to unit-test in plain Lua with a
 mock `ctx` (see `tests/`).

@@ -3,6 +3,20 @@
 All notable changes to this project are documented here. The format is loosely
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- Heuristic drag-and-drop re-ranking. Drag a tiled window and drop it over
+  another slot to give it that rank; the windows in between shift one step
+  along the C. The Lua layout API has no drag event, so a drop is inferred
+  from a lone window moving more than `max(120px, 8% of the screen diagonal)`
+  from where it was last placed. New `state.drag_snap` flag (default on) and
+  `dragsnap` / `debug` `layout_msg` toggles.
+
+### Changed
+- Rebound the along-the-C shuffle from `SUPER+CTRL+L`/`H` to
+  `SUPER+CTRL+DOWN`/`UP` — `SUPER+CTRL+L` is Omarchy's lock-screen shortcut.
+
 ## [0.1.0] - 2026-09-08
 
 First release.
@@ -26,5 +40,5 @@ First release.
   left column stretches to fill.
 - Adjustable proportions via `layout_msg`: `grow` / `shrink` (mainstage width),
   `taller` / `shorter` (bottom-strip height), `reset`, `leftfrac <0.2..0.5>`.
-- Default keybinds: `SUPER+M`, `SUPER+CTRL+DOWN`/`UP`, `SUPER+=`/`-`,
-  `SUPER+[`/`]`, `SUPER+0`.
+- Default keybinds: `SUPER+M`, `SUPER+CTRL+L`/`H`, `SUPER+=`/`-`, `SUPER+[`/`]`,
+  `SUPER+0`.

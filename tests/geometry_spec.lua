@@ -140,6 +140,56 @@ do
   check("2 windows: other window fills the left column", box_of(c, 1).h >= AREA.h - 1)
 end
 
+-- 7. drag-and-drop: a window carried onto another slot is re-ranked there
+do
+  -- ctx whose place() also updates window.at/.size, so the next recalculate
+  -- sees each window where we last put it (like Hyprland does).
+  local function dctx(ids)
+    local targets = {}
+    for i, id in ipairs(ids) do
+      local t = {
+        index  = i,
+        window = { stable_id = id, active = false,
+                   at = { x = -1e4, y = -1e4 }, size = { x = 100, y = 100 } },
+      }
+      t.place = function(self, box)
+        self.placed      = box
+        self.window.at   = { x = box.x, y = box.y }
+        self.window.size = { x = box.w, y = box.h }
+      end
+      targets[i] = t
+    end
+    return { area = AREA, targets = targets }
+  end
+
+  local c = dctx({ 1, 2, 3, 4, 5 })
+  L.recalculate(c)                          -- order {5,4,3,2,1}, all placed
+  check("drop: 5 starts on the mainstage", mainstage_id(c) == 5)
+
+  -- "pick up" id 1 (a bottom-strip tile) and let go over the mainstage
+  for _, t in ipairs(c.targets) do
+    if t.window.stable_id == 1 then
+      t.window.at   = { x = AREA.w * 0.60, y = AREA.h * 0.20 }
+      t.window.size = { x = 400, y = 300 }
+    end
+  end
+  L.recalculate(c)
+  check("drop: dropped window took the mainstage", mainstage_id(c) == 1)
+  check("drop: old mainstage (5) shifted into the left column", box_of(c, 5).x < 1)
+
+  -- a tiny nudge must NOT re-rank anything
+  local d = dctx({ 10, 11, 12, 13, 14 })
+  L.recalculate(d)
+  local ms = mainstage_id(d)
+  for _, t in ipairs(d.targets) do
+    if t.window.stable_id == 11 then
+      t.window.at = { x = t.window.at.x + 12, y = t.window.at.y + 8 }
+    end
+  end
+  L.recalculate(d)
+  check("drop: a 12px nudge does not re-rank", mainstage_id(d) == ms)
+end
+
 ------------------------------------------------------------------ result
 print(fails == 0 and "\nALL PASS" or ("\n" .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)
