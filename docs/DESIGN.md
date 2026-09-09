@@ -58,52 +58,52 @@ slot.
   back to the front" gesture.
 - **`swapnext` / `swapprev`** → swap the focused window with its neighbour in
   the order, to hand-tune which peripheral slot something sits in.
-- **Drag and drop** → drop a window over another slot and it takes that slot's
-  rank, the windows in between shifting one step (see below).
+- **Drag and drop** → drop a window in a zone and it goes to the front of that
+  zone, the windows in between shifting one step (see below).
 - **Closed window** → pruned from `order`; everything below it shifts up.
 
 Ranking is kept as an explicit list rather than derived purely from window age
 so that `promote` and the shuffles are possible at all.
 
-## Drag and drop (a heuristic)
+## Drag and drop
 
 The Lua layout API (`recalculate` + `layout_msg`, Hyprland 0.56.x) has **no**
 drag, drop, mouse, or window-event hook. A custom layout is told nothing about
-a drag; it only sees the target list and gets asked to recalculate.
+a drag directly. But it doesn't need to be:
 
-So a drop is *inferred*. Every `recalculate` records the box each window was
-placed in (`state.placed`). On the next `recalculate`, if
+**A drag pick-up floats the window.** Hyprland's move-drag converts a tiled
+window to floating for the duration of the drag, which *removes it from the
+tiled target list*. On drop it's converted back and **re-added as a fresh
+target at the end of the list**. So from the layout's side a drag looks like:
+the window vanishes, then a "new" window with the same `stable_id` appears.
 
-- no window was added or removed since that placement, **and**
-- exactly one window's centre is now more than
-  `max(120px, 5% of the screen diagonal)` from its recorded box,
+`stable_id`s are monotonic and never reused, so a "new" id the layout has
+placed before (`state.seen`) can only be a window that left the tiled set and
+came back — a drop (or a workspace bounce, or an un-fullscreen; all want the
+same treatment). That window is **not** sent to the mainstage like a genuine
+new window. Instead its centre — still the drop point at the moment
+`recalculate` runs, before it's been placed — picks a **zone**:
 
-that window is taken to have been dragged, and re-ranked:
+| Zone | Test | Goes to |
+| --- | --- | --- |
+| SIDE | `x` left of the mainstage | rank 2 — top of the left column |
+| BOTTOM | `y` below the mainstage | first strip slot |
+| MAIN | otherwise | rank 1 — the mainstage |
 
-- **mainstage or left column** (ranks 1–4) — the drop point is hit-tested
-  against those four slot rectangles; a hit re-ranks the window straight into
-  that slot. These are the slots where landing in the *right* one matters.
-- **anything else** — the bottom strip, or a point off every slot — the window
-  goes to rank 5, the front of the strip. Past the big slots the order of the
-  "small window line" is not worth aiming at; "most recent goes first" is the
-  whole rule.
+`zone_rank` reads those bounds straight off the slot boxes, so it always
+matches the real geometry. Front of the zone, nothing finer — past the big
+slots the order of the small-window line isn't worth aiming at.
 
-`state.order` then shifts everything between the window's old and new rank by
-one.
+An earlier version tried to *infer* the drag in place (watch for one window's
+centre jumping far from where it was last placed) and snap to the nearest slot
+*centre*. Two problems, both fixed by the current approach: the drag actually
+removes the window so the "same set, one moved" test never held; and the
+mainstage rectangle is large and central enough that its centre is the nearest
+one across most of the screen, so nearly every drop promoted to the mainstage.
 
-An earlier version snapped to the *nearest slot centre* instead. That failed:
-the mainstage rectangle is so much larger than the others that its centre is
-the closest one for most of the screen, so nearly every drop promoted to the
-mainstage. Hit-testing the actual rectangles fixed it.
-
-Limitations, by construction:
-
-- It cannot distinguish a drop from any other large single-window move.
-- Two windows moving at once (e.g. a proportion change) is ignored, which is
-  what keeps `grow` / `taller` / etc. from tripping it.
-
-`state.drag_snap` (default `true`, toggled by the `dragsnap` message) turns the
-whole thing off. `debug` toggles a notification showing each detected re-rank.
+`state.drag_snap` (default `true`, toggled by the `dragsnap` message) turns it
+off — a dropped window is then treated as new and returns to the mainstage.
+`debug` toggles a notification with the resolved rank.
 
 ### What is *not* possible
 
@@ -129,14 +129,16 @@ left column stretches (one half-height tile at 3 windows, the 2a/2b/2c split at
 
 ## Implementation shape
 
-- `ranked(ctx)` — reconcile `state.order` with live targets, return them ordered.
+- `ranked(ctx)` — reconcile `state.order` with live targets; return them
+  ordered, plus the list of ids that came back from a drag.
 - `slots(area, n)` — pure function: given the work area and a count, return `n`
   slot rectangles in rank order.
-- `apply_drop_snap(ctx, order, boxes)` — infer a drag-and-drop from window
-  geometry and re-rank the dropped window; returns `true` if `state.order`
-  changed.
-- `recalculate(ctx)` — `ranked` → `slots` → `apply_drop_snap` → `target:place`
-  per window, recording each placement for the next drop check.
+- `zone_rank(area, boxes, n, x, y)` — which zone front a point maps to (1, 2,
+  or the first strip slot).
+- `place_returning(...)` — move each dropped window to its zone front; returns
+  `true` if `state.order` changed.
+- `recalculate(ctx)` — `ranked` → `slots` → `place_returning` → `target:place`
+  per window, marking every placed id in `state.seen`.
 - `layout_msg(ctx, msg)` — mutate `state` (order, flags or proportions), return
   `true` to trigger a re-layout.
 

@@ -99,23 +99,26 @@ Available messages: `promote`, `swapnext`, `swapprev`, `grow`, `shrink`,
 ## Drag and drop
 
 Drag a tiled window with `SUPER + left-mouse` (Omarchy's default move bind) and
-drop it:
+drop it into one of three zones. It goes to the **front** of that zone — no
+finer aim than the zone itself:
 
-- **onto the mainstage or the left column** → it lands in that exact slot;
-- **anywhere else** (the bottom strip, or off the screen) → it goes to the
-  front of the strip.
+| Drop zone | Where the window lands |
+| --- | --- |
+| **MAIN** — the mainstage (top-right) | the mainstage (rank 1) |
+| **SIDE** — the whole left column | top of the left column (`2a`) |
+| **BOTTOM** — the strip under the mainstage | the first strip slot |
 
-The windows between its old and new rank shift one step along the C.
+Everything between the window's old and new rank shifts one step along the C.
 
-Hyprland's Lua layout API exposes no drag or drop event, so this is a
-heuristic: on a reflow where no window was added or removed and exactly one
-window's centre has moved more than `max(120px, 5% of the screen diagonal)`
-from where the layout last placed it, that window is treated as dropped. The
-big slots (ranks 1–4) are hit-tested so a deliberate drop onto one is exact;
-everything past them is treated as "just put it at the front of the small
-window line" rather than guessing a strip tile. It can't tell a drop from any
-other large single-window jump. Turn it off with the `dragsnap` message;
-`debug` toggles a notification on each detected drop.
+Hyprland's Lua layout API exposes no drag or drop event. But a drag *pick-up*
+floats the window, so on drop Hyprland hands it back to the layout as a brand
+new tile — and any window id the layout has placed before is taken to be a
+returning drop rather than a new window. Its drop point (window centre) picks
+the zone. A genuinely new window still goes straight to the mainstage.
+
+Turn the whole behaviour off with the `dragsnap` message (a dropped window
+then just returns to the mainstage like any new one); `debug` toggles a
+notification showing the rank each drop resolved to.
 
 ## Tuning
 
@@ -127,7 +130,7 @@ Edit the `state` table at the top of `goldenspiral.lua`:
 | `bottom_frac` | `0.18` | bottom-strip row height as a fraction of the work area |
 | `top_split` | `0.41` | height of `2a` and of `2b` (`2c` gets the remainder) |
 | `min_tile_w` | `0.16` | bottom-strip tiles never get narrower than this; extra windows wrap to new rows |
-| `drag_snap` | `true` | re-rank a window to the nearest slot when it's dragged and dropped |
+| `drag_snap` | `true` | send a dragged-and-dropped window to the front of its drop zone |
 
 ## How it works
 
@@ -135,14 +138,16 @@ Edit the `state` table at the top of `goldenspiral.lua`:
 mainstage. Each `recalculate`:
 
 1. `ranked(ctx)` reconciles that list with the live targets — prunes closed
-   windows, front-inserts new ones (newest first).
+   windows, front-inserts genuinely new ones (newest first), and parks any
+   *returning* window (a known id handed back as fresh — i.e. a drop) at the
+   end for step 3.
 2. `slots(area, n)` — a pure function — returns `n` slot rectangles in rank
    order for the current work area and window count.
-3. `apply_drop_snap` compares each window's live position against the box it was
-   last placed in; a lone large mover is re-ranked to the nearest slot (see
-   [Drag and drop](#drag-and-drop)).
+3. `place_returning` moves each dropped window to the front of its drop zone
+   (`zone_rank` reads the zone from the slot boxes — see
+   [Drag and drop](#drag-and-drop)), then `state.order` is re-materialised.
 4. each window is placed with `target:place(box)`, which applies gaps, reserved
-   area and pseudotiling, and the box is recorded for the next drop check.
+   area and pseudotiling; every placed id is recorded in `state.seen`.
 
 `layout_msg` mutates `state.order` (`promote` / `swapnext` / `swapprev`) or the
 `state` flags and proportions, and returns `true` to trigger a re-layout.

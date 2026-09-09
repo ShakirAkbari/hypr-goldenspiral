@@ -8,15 +8,15 @@
 -- windows form a C that hugs the mainstage's left edge and its bottom edge.
 -- A new window takes the mainstage and pushes everyone else one slot down the
 -- C. The order is tracked explicitly, so windows can be re-ranked at runtime
--- (promote to mainstage, shuffle along the C, or drag a window and drop it on
--- another slot). The whole layout reflows on every add/remove/re-rank.
+-- (promote to mainstage, shuffle along the C, or drag a window and drop it in
+-- another zone). The whole layout reflows on every add/remove/re-rank.
 --
--- Drag-and-drop: Hyprland's Lua layout API has no drag hook, so this is a
--- heuristic. On a reflow where nothing was added or removed and exactly one
--- window has been carried well clear of its slot, that window is re-ranked.
--- Dropping onto the mainstage or the left column (ranks 1..4) lands there
--- exactly; a drop anywhere else goes to the front of the bottom strip.
--- Everything between the old and new rank shifts one step along the C.
+-- Drag-and-drop: Hyprland's Lua layout API has no drag hook. A drag pick-up
+-- floats the window, so on drop it comes back as a fresh target -- and any
+-- stable_id we've placed before is treated as a returning drop rather than a
+-- new window. It goes to the FRONT of whichever of three zones it was dropped
+-- in: MAIN (the mainstage) -> rank 1, SIDE (the left column) -> rank 2,
+-- BOTTOM (the strip) -> first strip slot. No finer aim than the zone.
 -- Toggle with the `dragsnap` msg.
 --
 -- Slots, in rank order (1 = mainstage):
@@ -39,18 +39,14 @@ local state = {
                        -- (fraction of the work-area width); extra windows
                        -- wrap into more rows instead of shrinking further.
   order       = {},    -- list of window stable_ids, order[1] = mainstage
-  placed      = {},    -- stable_id -> the box we last placed that window in,
-                       -- so a drop can be told apart from a normal reflow
-  placed_n    = 0,     -- window count at the last placement
-  drag_snap   = true,  -- on drop, re-rank the window to the nearest slot
-  debug       = false, -- notify on each detected drop-snap
+  seen        = {},    -- every stable_id we've ever placed. A "new" window
+                       -- that's already in here is really a returning one
+                       -- (dragged out and dropped back), so it's placed by
+                       -- drop zone instead of being sent to the mainstage.
+  drag_snap   = true,  -- honour a drag-and-drop; off = a dropped window just
+                       -- goes back to the mainstage like any new window
+  debug       = false, -- notify on each drop-zone placement
 }
-
--- A move counts as a drop (not jitter) once the window's centre lands at least
--- this far from where we last placed it, or 5% of the screen diagonal,
--- whichever is larger.
-local DRAG_SNAP_MIN_PX   = 120
-local DRAG_SNAP_MIN_FRAC = 0.05
 
 local function clamp(x, lo, hi)
   return math.max(lo, math.min(hi, x))
@@ -80,9 +76,12 @@ local function active_id(ctx)
   end
 end
 
--- Reconcile state.order with the live targets and return them in rank order.
--- New windows are inserted at the front (newest first) so opening a window
--- still promotes it to the mainstage.
+-- Reconcile state.order with the live targets and return them in rank order,
+-- plus the list of ids that just came back from a drag (to be placed by zone).
+-- A genuinely new window is inserted at the front (newest first) so opening one
+-- promotes it to the mainstage. A "new" id we've placed before is a returning
+-- window -- a drag pick-up floats the window, so on drop Hyprland hands it back
+-- as a fresh target -- and is parked at the end for the caller to zone-place.
 local function ranked(ctx)
   local by_id, present = {}, {}
   for _, t in ipairs(ctx.targets) do
@@ -102,23 +101,33 @@ local function ranked(ctx)
   end
   state.order = kept
 
-  -- collect windows we haven't ranked yet, newest (highest id) first
   local known = {}
   for _, id in ipairs(state.order) do
     known[id] = true
   end
-  local fresh = {}
+
+  -- split unranked windows into genuinely new and returning-from-a-drag
+  local fresh, returning = {}, {}
   for id in pairs(present) do
     if not known[id] then
-      fresh[#fresh + 1] = id
+      if state.seen[id] and state.drag_snap then
+        returning[#returning + 1] = id
+      else
+        fresh[#fresh + 1] = id
+      end
     end
   end
-  -- oldest first, so repeated front-insertion leaves the newest at rank 1
+
+  -- new windows: oldest first, so repeated front-insertion leaves newest at 1
   table.sort(fresh, function(a, b)
     return a < b
   end)
   for _, id in ipairs(fresh) do
     table.insert(state.order, 1, id)
+  end
+  -- returning windows: park at the end; recalculate() moves them to their zone
+  for _, id in ipairs(returning) do
+    state.order[#state.order + 1] = id
   end
 
   -- materialise targets in rank order
@@ -132,7 +141,7 @@ local function ranked(ctx)
       out[#out + 1] = t
     end
   end
-  return out
+  return out, returning
 end
 
 -- Build N boxes in rank order for the work area `a` = {x, y, w, h}.
@@ -191,127 +200,91 @@ local function slots(a, n)
   return out
 end
 
-local function box_center(b)
-  return b.x + b.w * 0.5, b.y + b.h * 0.5
+-- The layout is three drop zones: MAIN (the mainstage, top-right), SIDE (the
+-- whole left column) and BOTTOM (the strip under the mainstage). A window
+-- dropped in a zone goes to the *front* of that zone -- rank 1, rank 2, or the
+-- first strip slot -- no finer aim than that. Derived from the slot boxes so
+-- it always matches the real geometry.
+local function zone_rank(area, boxes, n, x, y)
+  local left_edge = boxes[1].x            -- mainstage x = end of the left column
+  if n >= 2 and x < left_edge then
+    return 2                              -- SIDE  -> front of the left column
+  end
+  if n >= 5 and y >= boxes[1].y + boxes[1].h then
+    return 5                              -- BOTTOM -> first strip slot
+  end
+  return 1                                -- MAIN  -> mainstage
 end
 
-local function point_in(b, x, y)
-  return x >= b.x and x < b.x + b.w and y >= b.y and y < b.y + b.h
-end
-
--- Heuristic drag-and-drop. If the id set is unchanged since the last placement
--- and exactly one window has been carried well away from its slot, treat that
--- as a drop. The big slots -- mainstage and left column, ranks 1..4 -- are
--- hit-tested, so dropping onto one lands there exactly. A drop anywhere else
--- (the bottom strip, or off the edge) just sends the window to the front of
--- the strip; picking a precise strip tile isn't worth it. Everything between
--- the window's old and new rank shifts one step along the C. Returns true if
--- state.order changed.
-local function apply_drop_snap(ctx, order, boxes)
-  if not state.drag_snap or #order < 2 then
-    return false
-  end
-
-  -- the placement baseline must cover exactly this set of windows
-  local n_live = 0
-  for _, t in ipairs(order) do
-    if t.window then
-      n_live = n_live + 1
-      if not state.placed[t.window.stable_id] then
-        return false
-      end
+-- Move each returning (just-dropped) window to the front of the zone it was
+-- released in. Returns true if state.order changed.
+local function place_returning(returning, area, boxes, targets_by_id, n)
+  local changed = false
+  for _, id in ipairs(returning) do
+    local t = targets_by_id[id]
+    local w = t and t.window
+    local rank
+    if w and w.at and w.size then
+      local cx = w.at.x + w.size.x * 0.5
+      local cy = w.at.y + w.size.y * 0.5
+      rank = zone_rank(area, boxes, n, cx, cy)
+    else
+      rank = math.min(5, n)                -- no geometry: treat as a small window
+    end
+    remove_value(state.order, id)
+    table.insert(state.order, math.min(rank, #state.order + 1), id)
+    changed = true
+    if state.debug then
+      pcall(function()
+        hl.notification.create({
+          text = string.format("goldenspiral: dropped -> rank %d", rank),
+          timeout = 1500,
+        })
+      end)
     end
   end
-  if n_live ~= state.placed_n then
-    return false
-  end
-
-  local diag      = math.sqrt(ctx.area.w * ctx.area.w + ctx.area.h * ctx.area.h)
-  local threshold = math.max(DRAG_SNAP_MIN_PX, diag * DRAG_SNAP_MIN_FRAC)
-
-  local moved, mcx, mcy, moved_count = nil, 0, 0, 0
-  for _, t in ipairs(order) do
-    local w = t.window
-    if w then
-      local at, sz = w.at, w.size
-      if not (at and sz) then
-        return false -- a window without live geometry; sit this reflow out
-      end
-      local cx, cy = at.x + sz.x * 0.5, at.y + sz.y * 0.5
-      local px, py = box_center(state.placed[w.stable_id])
-      if math.sqrt((cx - px) ^ 2 + (cy - py) ^ 2) > threshold then
-        moved, mcx, mcy = w.stable_id, cx, cy
-        moved_count = moved_count + 1
-      end
-    end
-  end
-  if moved_count ~= 1 then
-    return false
-  end
-
-  -- hit-test the big slots; fall back to the front of the strip
-  local n = #order
-  local target
-  for j = 1, math.min(4, n) do
-    if boxes[j] and point_in(boxes[j], mcx, mcy) then
-      target = j
-      break
-    end
-  end
-  target = target or math.min(5, n)
-
-  local cur = index_of(state.order, moved)
-  if not cur or cur == target then
-    return false
-  end
-
-  table.remove(state.order, cur)
-  table.insert(state.order, target, moved)
-
-  if state.debug then
-    pcall(function()
-      hl.notification.create({
-        text = string.format("goldenspiral drop-snap: slot %d -> %d", cur, target),
-        timeout = 1500,
-      })
-    end)
-  end
-  return true
+  return changed
 end
 
 hl.layout.register("goldenspiral", {
   recalculate = function(ctx)
-    local order = ranked(ctx)
+    local order, returning = ranked(ctx)
     local n = #order
     if n == 0 then
       return
     end
+
     if n == 1 then
       order[1]:place(ctx.area)
-      state.placed = {}
       if order[1].window then
-        state.placed[order[1].window.stable_id] = ctx.area
+        state.seen[order[1].window.stable_id] = true
       end
-      state.placed_n = n
       return
     end
 
     local boxes = slots(ctx.area, n)
 
-    if apply_drop_snap(ctx, order, boxes) then
-      order = ranked(ctx) -- re-materialise targets in the new rank order
+    -- send any just-dropped window to the front of its drop zone
+    if #returning > 0 then
+      local by_id = {}
+      for _, t in ipairs(ctx.targets) do
+        if t.window then
+          by_id[t.window.stable_id] = t
+        end
+      end
+      if place_returning(returning, ctx.area, boxes, by_id, n) then
+        order = (ranked(ctx)) -- re-materialise in the new order
+      end
     end
 
-    state.placed = {}
     for i = 1, n do
       if boxes[i] then
         order[i]:place(boxes[i])
         if order[i].window then
-          state.placed[order[i].window.stable_id] = boxes[i]
+          state.seen[order[i].window.stable_id] = true
         end
       end
     end
-    state.placed_n = n
   end,
 
   layout_msg = function(ctx, msg)

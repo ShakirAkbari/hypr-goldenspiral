@@ -6,14 +6,14 @@ based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
-- Heuristic drag-and-drop re-ranking. Drag a tiled window and drop it: onto the
-  mainstage or left column it lands in that exact slot; anywhere else it goes
-  to the front of the bottom strip. The windows in between shift one step along
-  the C. The Lua layout API has no drag event, so a drop is inferred from a
-  lone window moving more than `max(120px, 5% of the screen diagonal)` from
-  where it was last placed, then the big slots (ranks 1–4) are hit-tested. New
-  `state.drag_snap` flag (default on) and `dragsnap` / `debug` `layout_msg`
-  toggles.
+- Drag-and-drop re-ranking, three zones. Drag a tiled window and drop it in the
+  MAIN zone (→ mainstage), the SIDE zone (→ top of the left column) or the
+  BOTTOM zone (→ first strip slot); the windows in between shift one step along
+  the C. The Lua layout API has no drag event, but a drag pick-up floats the
+  window, so on drop it returns as a fresh tile — any `stable_id` the layout
+  has placed before is treated as a returning drop and placed by zone rather
+  than sent to the mainstage. New `state.drag_snap` flag (default on) and
+  `dragsnap` / `debug` `layout_msg` toggles.
 
 ### Changed
 - Rebound the along-the-C shuffle from `SUPER+CTRL+L`/`H` to
