@@ -1,4 +1,4 @@
-# goldenspiral
+# goldenspiral tiling layout
 
 A custom [Hyprland](https://hypr.land) tiling layout, written in Lua a no
 compiled plugin. The window you're working in is a large **mainstage** on the
