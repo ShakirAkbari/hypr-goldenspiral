@@ -251,25 +251,44 @@ local function slots(a, n, carve)
   end
   local band = sh * rows
   local strip_top = Y + (H - band)
-  local cw = MW / cols
 
   out[1] = { x = X + LW, y = Y, w = MW, h = strip_top - Y }
   left_column(true)
 
+  -- The bottom row is an L: columns left of the bar run to the work-area floor,
+  -- columns over the bar stop at its top edge. A column edge is snapped to the
+  -- bar's left edge so nothing overlaps the bar.
   local bar_left = X + W - bar_w
+  local left_w = bar_left - (X + LW)
+  local has_bar = bar_h > 0 and left_w > W * state.min_tile_w
+  local left_cols, right_cols = cols, 0
+  if has_bar then
+    left_cols = math.min(cols, math.max(1, math.ceil(cols * left_w / MW)))
+    right_cols = cols - left_cols
+  end
+
   for k = 1, n_strip do
     local row = math.floor((k - 1) / cols)   -- 0 = bottom row, fills first
-    local col = (k - 1) % cols
-    local tx = X + LW + col * cw
-    local ty = strip_top + (rows - 1 - row) * sh
-    local th = sh
-    -- a bottom-row column that starts within the bar's x-range stops above the
-    -- bar; columns to its left run to the floor (the bar floats over any sliver
-    -- of overlap)
-    if row == 0 and bar_h > 0 and tx >= bar_left - 1 then
-      th = sh - bar_h
+    local idx = (k - 1) % cols
+    local tx, tw, th
+    local base_y = strip_top + (rows - 1 - row) * sh
+
+    if row == 0 and has_bar and idx >= left_cols then
+      local j = idx - left_cols
+      tw = bar_w / math.max(1, right_cols)
+      tx = bar_left + j * tw
+      th = sh - bar_h                        -- this column is over the app bar
+    elseif row == 0 and has_bar then
+      tw = left_w / left_cols
+      tx = X + LW + idx * tw
+      th = sh                                -- runs to the floor beside the bar
+    else
+      tw = MW / cols
+      tx = X + LW + idx * tw
+      th = (row == 0 and bar_h > 0) and (sh - bar_h) or sh
     end
-    out[3 + k] = { x = tx, y = ty, w = cw, h = th }
+
+    out[3 + k] = { x = tx, y = base_y, w = tw, h = th }
   end
 
   return out

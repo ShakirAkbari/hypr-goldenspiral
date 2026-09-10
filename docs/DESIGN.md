@@ -43,9 +43,9 @@ a single ordered list on each `recalculate`, i.e. a custom layout.
 - **Bottom strip** (ranks 4, 5, ...) is the C's bottom stroke, tucked under the
   mainstage. Tall tiles that run to the work-area floor and fill left to right,
   wrapping upward only past `min_tile_w`. The strip and the app bar share the
-  bottom edge: a strip column over the bar's x-range stops above the bar; the
-  columns to its left run to the floor. The bar floats over any small sliver of
-  overlap.
+  bottom edge: the bottom row is an L, split at the bar's left edge. Columns
+  left of that line run to the floor; columns over the bar stop at its top
+  edge. Nothing overlaps the bar.
 - Proportions start near the golden ratio (`left_frac = 0.382`) but are not
   dogmatic about it; legibility of the mainstage wins.
 
@@ -175,10 +175,11 @@ never counts toward `n`. `recalculate` then:
 2. `bar_target:place(box)`.
 3. `slots(area, n, footprint)` places the rest. The mainstage rises because the
    strip band below it is now tall, not because of the bar directly. The bar
-   only matters to the bottom row of the strip: a column whose left edge is in
-   the bar's x-range stops at the bar's top edge instead of the work-area
-   floor. Columns to its left run to the floor even if they poke a little into
-   the bar's x-range; the bar sits above them on the `top` layer.
+   only reshapes the strip's bottom row: it is split at the bar's left edge
+   into a left part whose columns run to the floor and a right part (exactly
+   the bar's width) whose columns stop at the bar's top edge. A column edge
+   lands on the bar's left edge, so no tile overlaps the bar. Rows wrapped
+   above the bottom one ignore the bar entirely.
 
 The left column never sees the bar or the strip: it is always two full-height
 boxes to the left of everything. That is the point of capping it at two, so the
