@@ -35,19 +35,21 @@ by an explicit recency order instead of a persistent split tree.
   left column          bottom strip
 ```
 
-- **Slot 1**: mainstage, right side. Full height until a strip forms, then it
-  stops above the strip.
+- **Slot 1**: mainstage, right side. Full height (stopping above the app bar if
+  present) until a strip forms, then it stops above the strip.
 - **Slots 2 and 3**: the left column, always exactly these two boxes. Rank 2 is
-  always the upper one; both keep full height (the bar and the strip never
-  touch them).
+  the upper one and is as tall as the mainstage; rank 3 fills the rest, lining
+  up with the strip band. The bar and strip never touch the left column.
 - **Slots 4, 5, ...**: the bottom strip under the mainstage. Tall tiles that
-  run down to the work-area floor, filling left to right then wrapping upward
-  once a tile would fall below `min_tile_w`. A strip column whose x-range is
-  over the app bar stops above the bar instead of the floor.
+  fill left to right then wrap upward once a tile would fall below
+  `min_tile_w`. The bottom row is split at the app bar's left edge: columns to
+  its left run to the work-area floor, columns over the bar stop above it. The
+  over-the-bar side gets the wider share of columns (two to the left's one at
+  the defaults).
 
-With 2-3 windows there's no strip: the mainstage runs full height (the app bar,
-if present, floats over its bottom-right corner) and the left column holds one
-or both of its boxes.
+With 2-3 windows there's no strip: the mainstage takes the whole right side
+(above the bar) and the left column holds one box (n=2) or both (n=3, split at
+`left_split`).
 
 It ships with a companion **app bar** (`bar/chronobar.py`): a normal window that
 the layout recognises by class and pins to a fixed slot in the bottom-right
@@ -122,7 +124,7 @@ finer aim than the zone itself:
 | Drop zone | Where the window lands |
 | --- | --- |
 | **MAIN**: the mainstage (top-right) | the mainstage (rank 1) |
-| **SIDE**: the whole left column | top of the left column (`2a`) |
+| **SIDE**: the whole left column | top of the left column (rank 2) |
 | **BOTTOM**: the strip under the mainstage | the first strip slot |
 
 Everything between the window's old and new rank shifts one step along the C.
@@ -143,9 +145,10 @@ notification showing the rank each drop resolved to.
 `org.goldenspiral.chronobar`). It is not a layer-shell surface: `recalculate`
 spots the target with that class, pins it to a fixed slot in the bottom-right
 corner (`bar.w_frac` of the work area wide, `bar.h_px` tall), keeps it out of
-the C ranking, and lifts the mainstage and bottom strip above it. The left
-column stays full height. `install.sh` sets it to launch at session start and
-adds a `no_focus` window rule.
+the C ranking. The mainstage stops above the bar, or above the strip once one
+forms; the strip's bottom row is split at the bar's left edge so no tile
+overlaps it. The left column is never touched by the bar. `install.sh` sets it
+to launch at session start and adds a `no_focus` window rule.
 
 It shows two zones, split by a divider:
 
@@ -173,7 +176,7 @@ Edit the `state` table at the top of `goldenspiral.lua`:
 | --- | --- | --- |
 | `left_frac` | `0.382` | left-column width as a fraction of the work area |
 | `bottom_frac` | `0.34` | bottom-strip band height as a fraction of the work area (`taller` / `shorter` adjust it) |
-| `left_split` | `0.5` | the top-left box's share of the left column height |
+| `left_split` | `0.66` | top-left box's share of the left column when there is no strip (with a strip the split follows the mainstage bottom) |
 | `min_tile_w` | `0.18` | bottom-strip tiles never get narrower than this; extra windows wrap to new rows |
 | `drag_snap` | `true` | send a dragged-and-dropped window to the front of its drop zone |
 | `bar.class` | `org.goldenspiral.chronobar` | window class the layout pins to the corner |

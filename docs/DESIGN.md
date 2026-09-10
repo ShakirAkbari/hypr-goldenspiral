@@ -35,11 +35,12 @@ a single ordered list on each `recalculate`, i.e. a custom layout.
 
 - **Mainstage** anchored centre-right so the eye has a fixed home. Full height
   until a strip forms, then it stops above the strip.
-- **Left column** is exactly two boxes, rank 2 on top. Both keep full height:
-  the C's left stroke is always two equal, legible windows, not a stack that
-  degrades to a sliver. This is the change from the earlier `2a/2b/2c` model,
-  where the "second biggest" window drifted to the middle or bottom of the
-  column and `2c` was too small to use.
+- **Left column** is exactly two boxes, rank 2 on top. When a strip is present
+  it splits at the strip's top edge, so rank 2 is exactly as tall as the
+  mainstage and rank 3 lines up with the strip band: the left stroke of the C
+  mirrors the right side's split. This is the change from the earlier
+  `2a/2b/2c` model, where the "second biggest" window drifted to the middle or
+  bottom of the column and `2c` was too small to use.
 - **Bottom strip** (ranks 4, 5, ...) is the C's bottom stroke, tucked under the
   mainstage. Tall tiles that run to the work-area floor and fill left to right,
   wrapping upward only past `min_tile_w`. The strip and the app bar share the
@@ -128,9 +129,10 @@ for the crowd.
 
 ## Small-N behaviour
 
-With 2-3 windows there is no bottom strip: the mainstage is full height (the
-app bar, if present, floats over its corner) and the left column holds one box
-at n=2 or both at n=3. The strip, and the C, form at the 4th window.
+With 2-3 windows there is no bottom strip: the mainstage takes the whole right
+side (stopping above the app bar if there is one) and the left column holds one
+box at n=2 or both at n=3, split at `left_split`. The strip, and the C, form at
+the 4th window.
 
 ## Implementation shape
 

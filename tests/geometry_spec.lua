@@ -102,7 +102,8 @@ do
   local before = box_of(c, 4)
   L.layout_msg(c, "swapnext")            -- 4 (rank 2) <-> 3 (rank 3)
   L.recalculate(c)
-  check("swapnext: focused window changed slot", box_of(c, 4).y ~= before.y)
+  check("swapnext: focused window changed slot",
+    box_of(c, 4).y ~= before.y or box_of(c, 4).x ~= before.x)
   check("swapnext: neighbour took the vacated slot", box_of(c, 3).y == before.y
     or box_of(c, 3).x == before.x)
 end

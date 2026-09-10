@@ -41,8 +41,9 @@
 local state = {
   left_frac   = 0.382, -- left column width as a fraction of the work area
   bottom_frac = 0.34,  -- bottom-strip band height as a fraction of the work area
-  left_split  = 0.5,   -- the top left box's share of the left column height
-                       -- (the bottom left box gets the rest)
+  left_split  = 0.66,  -- top-left box's share of the left column height when
+                       -- there is no strip (n == 3); with a strip the split
+                       -- follows the mainstage bottom instead
   min_tile_w  = 0.18,  -- bottom-strip tiles never get narrower than this
                        -- (fraction of the work-area width); extra windows
                        -- wrap into more rows instead of shrinking further.
@@ -216,15 +217,17 @@ local function slots(a, n, carve)
   local MW = W - LW                    -- mainstage / bottom-strip width
   local out = {}
 
-  -- The left column: two boxes (or one, at n == 2), rank 2 on top.
-  local function left_column(split_in_two)
+  -- The left column: two boxes (or one, at n == 2), rank 2 on top. When there
+  -- is a strip, `split_y` is its top edge, so the top-left box lines up with
+  -- (and is as tall as) the mainstage and the bottom-left box lines up with the
+  -- strip band.
+  local function left_column(split_y)
     if n < 2 then
       return
     end
-    if split_in_two then
-      local ts = H * state.left_split
-      out[2] = { x = X, y = Y,      w = LW, h = ts }
-      out[3] = { x = X, y = Y + ts, w = LW, h = H - ts }
+    if split_y then
+      out[2] = { x = X, y = Y,       w = LW, h = split_y - Y }
+      out[3] = { x = X, y = split_y, w = LW, h = (Y + H) - split_y }
     else
       out[2] = { x = X, y = Y, w = LW, h = H }
     end
@@ -232,10 +235,10 @@ local function slots(a, n, carve)
 
   local n_strip = n - 3
   if n_strip < 1 then
-    -- No strip yet: the mainstage runs full height; the bar (if any) floats
-    -- over its bottom-right corner.
-    out[1] = { x = X + LW, y = Y, w = MW, h = H }
-    left_column(n >= 3)
+    -- No strip yet: the mainstage takes the whole right side, stopping above
+    -- the app bar if there is one. The left column splits at left_split.
+    out[1] = { x = X + LW, y = Y, w = MW, h = H - bar_h }
+    left_column(n >= 3 and (Y + H * state.left_split) or nil)
     return out
   end
 
@@ -253,18 +256,20 @@ local function slots(a, n, carve)
   local strip_top = Y + (H - band)
 
   out[1] = { x = X + LW, y = Y, w = MW, h = strip_top - Y }
-  left_column(true)
+  left_column(strip_top)
 
   -- The bottom row is an L: columns left of the bar run to the work-area floor,
   -- columns over the bar stop at its top edge. A column edge is snapped to the
-  -- bar's left edge so nothing overlaps the bar.
+  -- bar's left edge so nothing overlaps the bar. Columns are split between the
+  -- two regions in proportion to their width, so the wider "over the bar"
+  -- region gets its share (with the defaults, two columns to the left's one).
   local bar_left = X + W - bar_w
   local left_w = bar_left - (X + LW)
   local has_bar = bar_h > 0 and left_w > W * state.min_tile_w
   local left_cols, right_cols = cols, 0
   if has_bar then
-    left_cols = math.min(cols, math.max(1, math.ceil(cols * left_w / MW)))
-    right_cols = cols - left_cols
+    right_cols = math.min(cols - 1, math.max(1, math.floor(cols * bar_w / MW + 0.5)))
+    left_cols = cols - right_cols
   end
 
   for k = 1, n_strip do
@@ -428,7 +433,7 @@ hl.layout.register("goldenspiral", {
     elseif cmd == "shorter" then
       state.bottom_frac = clamp(state.bottom_frac + 0.03, 0.15, 0.55)
     elseif cmd == "reset" then
-      state.left_frac, state.bottom_frac, state.left_split = 0.382, 0.34, 0.5
+      state.left_frac, state.bottom_frac, state.left_split = 0.382, 0.34, 0.66
     elseif cmd == "leftfrac" then
       state.left_frac = clamp(tonumber(arg) or state.left_frac, 0.2, 0.5)
     elseif cmd == "dragsnap" then -- toggle drag-and-drop re-ranking
