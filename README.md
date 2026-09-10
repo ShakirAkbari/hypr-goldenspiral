@@ -22,30 +22,32 @@ by an explicit recency order instead of a persistent split tree.
 
 ![goldenspiral with six windows](screenshots/goldenspiral.png)
 
-*Six windows: OBS on the mainstage, a left column of three (`2a`/`2b`/`2c`) and a
-two-tile bottom strip wrapping it into a C.*
-
 ```
-+----------+---------------------------+
-|  2a      |                           |
-+----------+        mainstage (1)      |
-|  2b      |                           |
-+----------+                           |
-|  2c      +---------------------------+
-+----------+  3a   |  3b   |  3c  ...  |
-+----------+-------+-------+-----------+
-     left column          bottom strip
-   (C's left stroke)    (C's bottom stroke)
++----------+---------------------------------+
+|          |                                 |
+| rank 2   |          mainstage (1)          |
+|          |                                 |
++----------+---------------------------------+
+|          |  4    |  5    |  6   | [app bar]|
+| rank 3   |       |       | (over the bar,   |
+|          |       |       |  stops above it) |
++----------+-------+-------+------------------+
+  left column          bottom strip
 ```
 
-- **Slot 1**: mainstage, right ~62 % wide, ~82 % tall.
-- **Slots 2a / 2b / 2c**: left column, top to bottom (`2c` is the minimum size).
-- **Slots 3a, 3b, …**: bottom strip under the mainstage, equal columns.
-  Once a tile would fall below `min_tile_w` the strip wraps into more rows
-  (growing upward, shrinking the mainstage) instead of shrinking tiles further.
+- **Slot 1**: mainstage, right side. Full height until a strip forms, then it
+  stops above the strip.
+- **Slots 2 and 3**: the left column, always exactly these two boxes. Rank 2 is
+  always the upper one; both keep full height (the bar and the strip never
+  touch them).
+- **Slots 4, 5, ...**: the bottom strip under the mainstage. Tall tiles that
+  run down to the work-area floor, filling left to right then wrapping upward
+  once a tile would fall below `min_tile_w`. A strip column whose x-range is
+  over the app bar stops above the bar instead of the floor.
 
-With 2-4 windows there's no bottom strip: the mainstage runs full height and the
-left column stretches to fill.
+With 2-3 windows there's no strip: the mainstage runs full height (the app bar,
+if present, floats over its bottom-right corner) and the left column holds one
+or both of its boxes.
 
 It ships with a companion **app bar** (`bar/chronobar.py`): a normal window that
 the layout recognises by class and pins to a fixed slot in the bottom-right
@@ -170,9 +172,9 @@ Edit the `state` table at the top of `goldenspiral.lua`:
 | field | default | meaning |
 | --- | --- | --- |
 | `left_frac` | `0.382` | left-column width as a fraction of the work area |
-| `bottom_frac` | `0.18` | bottom-strip row height as a fraction of the work area |
-| `top_split` | `0.41` | height of `2a` and of `2b` (`2c` gets the remainder) |
-| `min_tile_w` | `0.16` | bottom-strip tiles never get narrower than this; extra windows wrap to new rows |
+| `bottom_frac` | `0.34` | bottom-strip band height as a fraction of the work area (`taller` / `shorter` adjust it) |
+| `left_split` | `0.5` | the top-left box's share of the left column height |
+| `min_tile_w` | `0.18` | bottom-strip tiles never get narrower than this; extra windows wrap to new rows |
 | `drag_snap` | `true` | send a dragged-and-dropped window to the front of its drop zone |
 | `bar.class` | `org.goldenspiral.chronobar` | window class the layout pins to the corner |
 | `bar.w_frac` | `0.3333` | pinned bar width as a fraction of the work area (overridden by `barWidthFraction` in `bar.json`) |

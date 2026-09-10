@@ -79,8 +79,8 @@ do
   local c = ctx({ 1, 2, 3, 4, 5 }, 5)
   L.recalculate(c)
   check("5 windows: newest is mainstage", mainstage_id(c) == 5)
-  check("5 windows: id 1 is a bottom-strip tile (y in lower third)",
-    box_of(c, 1).y > AREA.h * 0.66)
+  check("5 windows: id 1 is a bottom-strip tile (y in the bottom band)",
+    box_of(c, 1).y > AREA.h * 0.6)
   check("5 windows: id 4 is top of left column", box_of(c, 4).x < 1 and box_of(c, 4).y < 1)
 end
 
@@ -246,9 +246,10 @@ local function ctx_bar(ids, active)
   return c
 end
 
--- 11. the bar is pinned to the bottom-right corner at its configured size
+-- 11. the bar is pinned to the bottom-right corner at its configured size.
+-- Fresh ids 51..55 -> order {55,54,53,52,51}: ranks map 55,54,53,52,51.
 do
-  local c = ctx_bar({ 1, 2, 3, 4, 5 }, 5)
+  local c = ctx_bar({ 51, 52, 53, 54, 55 }, 55)
   L.recalculate(c)
   local b = box_of(c, "BAR")
   check("bar: placed", b ~= nil)
@@ -258,26 +259,37 @@ do
   check("bar: hugs the bottom edge", math.abs((b.y + b.h) - (AREA.y + AREA.h)) < 1)
 end
 
--- 12. the mainstage and bottom strip lift above the bar; the left column does not
+-- 12. the strip runs to the floor beside the bar and stops above it over the
+-- bar; the mainstage lifts above the strip; the bottom-left box keeps full
+-- height.
 do
-  local c = ctx_bar({ 1, 2, 3, 4, 5 }, 5)
+  local c = ctx_bar({ 51, 52, 53, 54, 55 }, 55)
   L.recalculate(c)
-  local floor = AREA.y + AREA.h - BAR_H
-  check("bar carve: mainstage bottom is above the bar",
-    box_of(c, 5).y + box_of(c, 5).h <= floor + 1)
-  check("bar carve: a bottom-strip tile ends above the bar",
-    box_of(c, 1).y + box_of(c, 1).h <= floor + 1)
-  check("bar carve: left column still reaches the area floor",
-    box_of(c, 4).y + box_of(c, 4).h >= AREA.y + AREA.h - 1)
+  local floor = AREA.y + AREA.h
+  local main = box_of(c, 55)    -- rank 1
+  local bl = box_of(c, 53)      -- rank 3, bottom-left box
+  local s1 = box_of(c, 52)      -- rank 4, first strip column (left of the bar)
+  local s2 = box_of(c, 51)      -- rank 5, next strip column (over the bar)
+  check("bar carve: first strip column runs to the floor beside the bar",
+    s1.y + s1.h >= floor - 1)
+  check("bar carve: the strip column over the bar stops above it",
+    s2.y + s2.h <= floor - BAR_H + 1)
+  check("bar carve: mainstage bottom is above the strip band",
+    main.y + main.h <= floor - BAR_H + 1)
+  check("bar carve: bottom-left box still reaches the area floor",
+    bl.y + bl.h >= floor - 1)
+  check("bar carve: rank 2 is the top-left box (touches the top-left corner)",
+    box_of(c, 54).x < 1 and box_of(c, 54).y < 1)
 end
 
--- 13. no bar target -> layout is exactly as before (full height)
+-- 13. no bar target -> the layout still places everything (regression guard)
 do
-  local c = ctx({ 1, 2, 3, 4, 5 }, 5)
+  local c = ctx({ 51, 52, 53, 54, 55 }, 55)
   L.recalculate(c)
-  check("no bar: mainstage uses the full height",
-    box_of(c, 5).y + box_of(c, 5).h >= AREA.y + AREA.h - 1
-    or box_of(c, 1).y + box_of(c, 1).h >= AREA.y + AREA.h - 1)
+  check("no bar: strip still reaches the work-area floor",
+    box_of(c, 52).y + box_of(c, 52).h >= AREA.y + AREA.h - 1)
+  check("no bar: rank 2 is the top-left box",
+    box_of(c, 54).x < 1 and box_of(c, 54).y < 1)
 end
 
 ------------------------------------------------------------------ result

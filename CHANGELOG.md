@@ -15,10 +15,10 @@ based on [Keep a Changelog](https://keepachangelog.com/).
   chip for a menu of that app's windows and pick one to pull it onto the
   current workspace and `promote` it. Config at `~/.config/goldenspiral/bar.json`.
 - Layout support for the bar: `ranked` sets the bar target aside,
-  `bar_geometry(area)` places it in the corner, and `slots(area, n, carve)`
-  lifts the mainstage and bottom strip above it while the left column keeps
-  full height. New `state.bar` config; `barWidthFraction` / `barHeight` in
-  `bar.json` feed `bar.w_frac` / `bar.h_px`.
+  `bar_geometry(area)` places it in the corner, and the bottom-row strip
+  columns over the bar's x-range stop above it while everything else ignores
+  it. New `state.bar` config; `barWidthFraction` / `barHeight` in `bar.json`
+  feed `bar.w_frac` / `bar.h_px`.
 - A `no_focus` window rule for the bar and a `hl.on("hyprland.start")` launch
   of `goldenspiral-bar`.
 - `install.sh`: symlinks the layout, installs `bar/chronobar.py` as
@@ -29,8 +29,16 @@ based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 - Docs and comments now use plain ASCII punctuation only (no em or en dashes).
-- `slots` takes an optional third `carve` argument; called with two arguments
-  it behaves exactly as before.
+- **Slot model reworked.** The left column is now always exactly two full-height
+  boxes, rank 2 the upper one (was `2a`/`2b`/`2c`, where the second-biggest
+  window drifted to the middle or bottom and `2c` was unusably small). The
+  bottom strip is now tall tiles that run down to the work-area floor and fill
+  the space beside the app bar; a strip column over the bar's x-range stops
+  above the bar. The mainstage is full height until a strip forms (n >= 4),
+  then stops above it. New `state.left_split`; `bottom_frac` default raised to
+  `0.34`, `min_tile_w` to `0.18`; `top_split` removed.
+- `slots` takes an optional third argument, the app bar footprint
+  (`{bar_w, bar_h}`); called with two arguments it behaves exactly as before.
 
 ## [0.2.0] - 2026-09-08
 

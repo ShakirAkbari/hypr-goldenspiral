@@ -17,7 +17,7 @@ in a predictable, glanceable shape, without manual splitting.
 | --- | --- |
 | `dwindle` | A new window splits **the focused tile**, so the rest of the screen does not move. There is no notion of "the window I'm in is the big one". |
 | `dwindle` w/ tuned `default_split_ratio` | Gets the newest window big, but still only re-tiles one branch; older windows never reflow as a group. |
-| `master` (centre) | New window can take the master slot, but the stack is a plain column: it cannot wrap the master on two sides, and it cannot hold the specific 2a/2b/2c + bottom-strip shape. |
+| `master` (centre) | New window can take the master slot, but the stack is a plain column: it cannot wrap the master on two sides, and it cannot hold the two-box left column plus floor-height bottom strip shape. |
 
 The requirement that **all** windows reflow whenever the set changes is the line
 none of the built-ins cross. That needs a layout that recomputes every box from
@@ -26,25 +26,30 @@ a single ordered list on each `recalculate`, i.e. a custom layout.
 ## The C-wrap
 
 ```
-+----------+---------------------------+
-|  2a      |                           |
-+----------+        mainstage (1)      |
-|  2b      |                           |
-+----------+                           |
-|  2c      +---------------------------+
-+----------+  3a   |  3b   |  3c  ...  |
-+----------+-------+-------+-----------+
++----------+---------------------------------+
+|  rank 2  |          mainstage (1)          |
++----------+---------------------------------+
+|  rank 3  |  4   |  5   |  6  | [app bar]   |
++----------+------+------+-----+-------------+
 ```
 
-- **Mainstage** anchored centre-right so the eye has a fixed home.
-- **Left column** (`2a` to `2c`, top to bottom) is the C's left stroke. `2c` is
-  deliberately short; it is the "just keep an eye on it" slot.
-- **Bottom strip** (`3a`, `3b`, …) is the C's bottom stroke, tucked under the
-  mainstage. Equal columns.
+- **Mainstage** anchored centre-right so the eye has a fixed home. Full height
+  until a strip forms, then it stops above the strip.
+- **Left column** is exactly two boxes, rank 2 on top. Both keep full height:
+  the C's left stroke is always two equal, legible windows, not a stack that
+  degrades to a sliver. This is the change from the earlier `2a/2b/2c` model,
+  where the "second biggest" window drifted to the middle or bottom of the
+  column and `2c` was too small to use.
+- **Bottom strip** (ranks 4, 5, ...) is the C's bottom stroke, tucked under the
+  mainstage. Tall tiles that run to the work-area floor and fill left to right,
+  wrapping upward only past `min_tile_w`. The strip and the app bar share the
+  bottom edge: a strip column over the bar's x-range stops above the bar; the
+  columns to its left run to the floor. The bar floats over any small sliver of
+  overlap.
 - Proportions start near the golden ratio (`left_frac = 0.382`) but are not
   dogmatic about it; legibility of the mainstage wins.
 
-Rank order fills the slots `1 → 2a → 2b → 2c → 3a → 3b → …`, so the further a
+Rank order fills the slots `1 -> 2 -> 3 -> 4 -> 5 -> ...`, so the further a
 window is from your current focus history, the smaller and more peripheral its
 slot.
 
@@ -118,24 +123,25 @@ building.
 Past a certain count, splitting the bottom strip into ever-thinner columns is
 useless. `min_tile_w` sets a floor: when another column would breach it, the
 strip **wraps to a new row** and grows upward, compressing the mainstage (down
-to a hard floor of 30 % height). Tiles stay a usable size; the mainstage pays
+to a hard floor of 28 % height). Tiles stay a usable size; the mainstage pays
 for the crowd.
 
 ## Small-N behaviour
 
-With 2-4 windows there is no bottom strip: the mainstage is full height and the
-left column stretches (one half-height tile at 3 windows, the 2a/2b/2c split at
-4). The C only forms once there is enough to wrap with.
+With 2-3 windows there is no bottom strip: the mainstage is full height (the
+app bar, if present, floats over its corner) and the left column holds one box
+at n=2 or both at n=3. The strip, and the C, form at the 4th window.
 
 ## Implementation shape
 
 - `ranked(ctx)`: reconcile `state.order` with live targets; return them
   ordered, plus the list of ids that came back from a drag.
 - `slots(area, n, carve)`: pure function. given the work area, a count, and an
-  optional bar carve (`{main, left}` px lifted off the bottom of the mainstage
-  side and the left column), return `n` slot rectangles in rank order.
-- `bar_geometry(area)`: pure function. the pinned bar's bottom-right box and the
-  carve it implies.
+  optional `carve` (`{bar_w, bar_h}`, the app bar's footprint in the
+  bottom-right corner), return `n` slot rectangles in rank order. `carve` only
+  shortens the bottom-row strip columns that sit over the bar.
+- `bar_geometry(area)`: pure function. the pinned bar's bottom-right box and its
+  footprint.
 - `zone_rank(area, boxes, n, x, y)`: which zone front a point maps to (1, 2,
   or the first strip slot).
 - `place_returning(...)`: move each dropped window to its zone front; returns
@@ -165,14 +171,19 @@ target out before building `state.order`, so the bar is never in the C and
 never counts toward `n`. `recalculate` then:
 
 1. `bar_geometry(area)` returns the bar box (bottom-right, `w_frac` wide,
-   `h_px` tall) and a carve. The carve is `{main = h_px}` always, plus
-   `{left = h_px}` only if the bar is wide enough to overlap the left column
-   (it is not, at the defaults).
+   `h_px` tall) and its footprint `{bar_w, bar_h}`.
 2. `bar_target:place(box)`.
-3. `slots(area, n, carve)` lifts the mainstage and the bottom strip by
-   `carve.main` and the left column by `carve.left`. With the default corner
-   bar the left column and everything to its left keep full height; only the
-   mainstage side rises.
+3. `slots(area, n, footprint)` places the rest. The mainstage rises because the
+   strip band below it is now tall, not because of the bar directly. The bar
+   only matters to the bottom row of the strip: a column whose left edge is in
+   the bar's x-range stops at the bar's top edge instead of the work-area
+   floor. Columns to its left run to the floor even if they poke a little into
+   the bar's x-range; the bar sits above them on the `top` layer.
+
+The left column never sees the bar or the strip: it is always two full-height
+boxes to the left of everything. That is the point of capping it at two, so the
+"second biggest window" has one fixed home (rank 2, top-left) instead of
+drifting down a three-tile stack.
 
 `state.bar.w_frac` and `h_px` default in the Lua but are overridden by
 `barWidthFraction` / `barHeight` in `~/.config/goldenspiral/bar.json`, which the
@@ -187,5 +198,5 @@ layout config would otherwise draw around it.
 ## Possible extensions
 
 - Configurable mainstage anchor (centre-left / top variants of the C).
-- Per-window "pin to slot" so a chat window always stays in `2c`.
+- Per-window "pin to slot" so a chat window always stays in the bottom-left box.
 - A `focus-follows-rank` mode where cycling focus walks the C in order.
