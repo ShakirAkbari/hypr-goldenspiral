@@ -47,6 +47,10 @@ two-tile bottom strip wrapping it into a C.*
 With 2-4 windows there's no bottom strip: the mainstage runs full height and the
 left column stretches to fill.
 
+It ships with a companion **app bar** (`bar/chronobar.py`): a normal window that
+the layout recognises by class and pins to a fixed slot in the bottom-right
+corner, laying the other windows out around it. See [App bar](#app-bar) below.
+
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the reasoning behind every part of
 this.
 
@@ -56,15 +60,23 @@ this.
   provides `hl.layout.register` and the `hl` / `o` config globals. This is what
   [Omarchy](https://omarchy.org) ships. A plain `hyprland.conf` setup would need
   the equivalent Lua entrypoint.
+- For the app bar only: **python** with **PyGObject** and **GTK 4**. The layout
+  itself has no dependencies; skip the bar and it is still one Lua file.
 
 ## Install
 
-It's one file. Put it next to your other Hyprland Lua files and require it
-**after** whatever sets `general:layout`, so it wins:
-
 ```sh
-cp goldenspiral.lua ~/.config/hypr/hypr/goldenspiral.lua
+git clone https://github.com/ShakirAkbari/hypr-goldenspiral
+cd hypr-goldenspiral
+./install.sh
 ```
+
+`install.sh` symlinks `goldenspiral.lua` into `~/.config/hypr/hypr/`, installs
+`bar/chronobar.py` as `~/.local/bin/goldenspiral-bar`, and seeds
+`~/.config/goldenspiral/bar.json`. A `git pull` then updates everything in
+place.
+
+Then require it **after** whatever sets `general:layout`, so it wins:
 
 ```lua
 -- ~/.config/hypr/hyprland.lua  (or wherever your requires live)
@@ -76,8 +88,11 @@ hyprctl reload
 hyprctl configerrors   # expect no output
 ```
 
-The file registers the layout, sets `general.layout = "lua:goldenspiral"`, and
-binds the controls below.
+The layout registers itself, sets `general.layout = "lua:goldenspiral"`, binds
+the controls below, adds a window rule for the bar, and (where `hl.on` is
+available) launches `goldenspiral-bar` at session start. Want the layout only?
+Just `cp goldenspiral.lua ~/.config/hypr/hypr/` and skip `install.sh`; the bar
+launch and window rule no-op when the bar is not running.
 
 ## Keybinds
 
@@ -120,6 +135,34 @@ Turn the whole behaviour off with the `dragsnap` message (a dropped window
 then just returns to the mainstage like any new one); `debug` toggles a
 notification showing the rank each drop resolved to.
 
+## App bar
+
+`bar/chronobar.py` is a small GTK4 window (app id
+`org.goldenspiral.chronobar`). It is not a layer-shell surface: `recalculate`
+spots the target with that class, pins it to a fixed slot in the bottom-right
+corner (`bar.w_frac` of the work area wide, `bar.h_px` tall), keeps it out of
+the C ranking, and lifts the mainstage and bottom strip above it. The left
+column stays full height. `install.sh` sets it to launch at session start and
+adds a `no_focus` window rule.
+
+It shows two zones, split by a divider:
+
+- **left, recently closed.** An app lands here when its last window closes
+  (and it resolves to a desktop entry, so the chip can relaunch it); newest
+  close is leftmost. It leaves the instant the app is reopened.
+- **right, open now.** One chip per app with a live window, newest nearest the
+  corner, with a count badge when an app has more than one window.
+
+| Action | Result |
+| --- | --- |
+| Left-click a chip | launch a new instance |
+| Right-click a right-zone chip | menu of that app's windows; pick one to pull it onto the current workspace and `promote` it to the mainstage |
+
+Config: `~/.config/goldenspiral/bar.json`, hot-reloaded. `barWidthFraction` and
+`barHeight` there are also read by the layout so the tile matches what the bar
+draws. Other keys: `iconSize`, `gap`, `maxOpen`, `maxClosed`, `showNames`,
+`showCounts`, `zoneLabels`, `promoteOnPick`.
+
 ## Tuning
 
 Edit the `state` table at the top of `goldenspiral.lua`:
@@ -131,6 +174,9 @@ Edit the `state` table at the top of `goldenspiral.lua`:
 | `top_split` | `0.41` | height of `2a` and of `2b` (`2c` gets the remainder) |
 | `min_tile_w` | `0.16` | bottom-strip tiles never get narrower than this; extra windows wrap to new rows |
 | `drag_snap` | `true` | send a dragged-and-dropped window to the front of its drop zone |
+| `bar.class` | `org.goldenspiral.chronobar` | window class the layout pins to the corner |
+| `bar.w_frac` | `0.3333` | pinned bar width as a fraction of the work area (overridden by `barWidthFraction` in `bar.json`) |
+| `bar.h_px` | `150` | pinned bar height in pixels (overridden by `barHeight` in `bar.json`) |
 
 ## How it works
 
@@ -138,15 +184,17 @@ Edit the `state` table at the top of `goldenspiral.lua`:
 mainstage. Each `recalculate`:
 
 1. `ranked(ctx)` reconciles that list with the live targets: prunes closed
-   windows, front-inserts genuinely new ones (newest first), and parks any
-   *returning* window (a known id handed back as fresh, i.e. a drop) at the
-   end for step 3.
-2. `slots(area, n)`, a pure function, returns `n` slot rectangles in rank
-   order for the current work area and window count.
-3. `place_returning` moves each dropped window to the front of its drop zone
+   windows, front-inserts genuinely new ones (newest first), sets aside the
+   app-bar target (`bar.class`) to pin separately, and parks any *returning*
+   window (a known id handed back as fresh, i.e. a drop) at the end for step 3.
+2. If the bar is present, `bar_geometry(area)` gives its bottom-right box and
+   the carve it implies; `bar_target:place(box)`.
+3. `slots(area, n, carve)`, a pure function, returns `n` slot rectangles in
+   rank order for the work area, window count, and the bar carve.
+4. `place_returning` moves each dropped window to the front of its drop zone
    (`zone_rank` reads the zone from the slot boxes; see
    [Drag and drop](#drag-and-drop)), then `state.order` is re-materialised.
-4. each window is placed with `target:place(box)`, which applies gaps, reserved
+5. each window is placed with `target:place(box)`, which applies gaps, reserved
    area and pseudotiling; every placed id is recorded in `state.seen`.
 
 `layout_msg` mutates `state.order` (`promote` / `swapnext` / `swapprev`) or the
@@ -156,7 +204,7 @@ mainstage. Each `recalculate`:
 
 `tests/geometry_spec.lua` mocks the config API, loads the layout, and asserts on
 the placement logic (ranking, promote, swap, new-window-takes-mainstage,
-row-wrap, small-N). Runs under any Lua 5.x:
+row-wrap, small-N, and the app-bar pin and carve). Runs under any Lua 5.x:
 
 ```sh
 lua tests/geometry_spec.lua

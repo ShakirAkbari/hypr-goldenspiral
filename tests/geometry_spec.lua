@@ -22,8 +22,11 @@ _G.hl = {
   layout = { register = function(_, tbl) _G.REG = tbl end },
   config = function() end,
   dsp = { layout = function(s) return { msg = s } end },
+  window_rule = function() end,
+  exec_cmd = function() end,
 }
 _G.o = { bind = function() end }
+_G.GOLDENSPIRAL_TEST = true -- read_bar_cfg() is a no-op; bar keeps its defaults
 
 dofile(LAYOUT)
 local L = assert(_G.REG, "layout did not register")
@@ -223,6 +226,58 @@ do
   local c = drag_drop({ 61, 62, 63, 64, 65 }, 61, AREA.w * 0.08, AREA.h * 0.5)
   check("dragsnap off: dropped window goes to the mainstage", mainstage_id(c) == 61)
   L.layout_msg(mctx({ 1 }), "dragsnap")     -- back on for any later runs
+end
+
+------------------------------------------------------------------ the pinned app bar
+
+local BAR_CLASS = "org.goldenspiral.chronobar"
+local BAR_H = 150
+
+-- ctx with a chronobar target appended (Hyprland hands it back like any tile).
+local function ctx_bar(ids, active)
+  local c = ctx(ids, active)
+  local i = #c.targets + 1
+  c.targets[i] = {
+    index = i,
+    window = { stable_id = "BAR", class = BAR_CLASS },
+    placed = nil,
+    place = function(self, box) self.placed = box end,
+  }
+  return c
+end
+
+-- 11. the bar is pinned to the bottom-right corner at its configured size
+do
+  local c = ctx_bar({ 1, 2, 3, 4, 5 }, 5)
+  L.recalculate(c)
+  local b = box_of(c, "BAR")
+  check("bar: placed", b ~= nil)
+  check("bar: width is w_frac of the area", math.abs(b.w - AREA.w * 0.3333) < 2)
+  check("bar: height is h_px", b.h == BAR_H)
+  check("bar: hugs the right edge", math.abs((b.x + b.w) - (AREA.x + AREA.w)) < 1)
+  check("bar: hugs the bottom edge", math.abs((b.y + b.h) - (AREA.y + AREA.h)) < 1)
+end
+
+-- 12. the mainstage and bottom strip lift above the bar; the left column does not
+do
+  local c = ctx_bar({ 1, 2, 3, 4, 5 }, 5)
+  L.recalculate(c)
+  local floor = AREA.y + AREA.h - BAR_H
+  check("bar carve: mainstage bottom is above the bar",
+    box_of(c, 5).y + box_of(c, 5).h <= floor + 1)
+  check("bar carve: a bottom-strip tile ends above the bar",
+    box_of(c, 1).y + box_of(c, 1).h <= floor + 1)
+  check("bar carve: left column still reaches the area floor",
+    box_of(c, 4).y + box_of(c, 4).h >= AREA.y + AREA.h - 1)
+end
+
+-- 13. no bar target -> layout is exactly as before (full height)
+do
+  local c = ctx({ 1, 2, 3, 4, 5 }, 5)
+  L.recalculate(c)
+  check("no bar: mainstage uses the full height",
+    box_of(c, 5).y + box_of(c, 5).h >= AREA.y + AREA.h - 1
+    or box_of(c, 1).y + box_of(c, 1).h >= AREA.y + AREA.h - 1)
 end
 
 ------------------------------------------------------------------ result

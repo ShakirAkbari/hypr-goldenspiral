@@ -4,11 +4,18 @@ Small project, informal process. Issues and PRs welcome.
 
 ## Ground rules
 
-- The layout ships as a **single file**, `goldenspiral.lua`, with no runtime
-  dependencies beyond Hyprland's Lua config API. Keep it that way.
-- `slots(area, n)` must stay a **pure function** (work area + count in, slot
-  rectangles out). All state lives in the `state` table; all state changes go
-  through `layout_msg`. This is what keeps the geometry testable.
+- The layout is one file, `goldenspiral.lua`, with no runtime dependencies
+  beyond Hyprland's Lua config API. Keep it that way. The optional app bar is
+  one more file, `bar/chronobar.py` (python + PyGObject + GTK 4); the layout
+  must still work with the bar absent.
+- `slots(area, n, carve)` must stay a **pure function** (work area, count, and
+  the optional bar carve in; slot rectangles out). `bar_geometry(area)` is also
+  pure. All state lives in the `state` table; all state changes go through
+  `layout_msg`. This is what keeps the geometry testable. `read_bar_cfg` is the
+  one impure helper and is skipped under `_G.GOLDENSPIRAL_TEST`.
+- The bar's file read and the layout's must agree on `~/.config/goldenspiral/bar.json`:
+  `barWidthFraction` and `barHeight` size the pinned tile, the rest configure
+  rendering.
 - Match the existing comment density and style. The header block is the spec;
   update it when behaviour changes, and add a `CHANGELOG.md` entry.
 - Plain ASCII punctuation in prose and comments: no em or en dashes (use `-`,
@@ -18,7 +25,7 @@ Small project, informal process. Issues and PRs welcome.
 
 `tests/geometry_spec.lua` mocks `hl` / `o`, loads the layout, and checks the
 placement logic (ranking, `promote`, `swapnext`, new-window-takes-mainstage,
-row-wrap). Run it with any Lua 5.x:
+row-wrap, and the app-bar pin and carve). Run it with any Lua 5.x:
 
 ```sh
 lua tests/geometry_spec.lua
@@ -32,13 +39,17 @@ picks up an em or en dash.
 ## Manual check
 
 ```sh
-cp goldenspiral.lua ~/.config/hypr/hypr/goldenspiral.lua
+./install.sh
 hyprctl reload
 hyprctl configerrors        # must be empty
 ```
 
 Then open 2, 5, and 10+ windows on a scratch workspace and confirm the C forms,
-the bottom strip wraps, and `SUPER+M` promotes the focused window.
+the bottom strip wraps, and `SUPER+M` promotes the focused window. With
+`goldenspiral-bar` running, confirm it sits in the bottom-right corner, the
+mainstage and strip stop above it, the left column still reaches the floor,
+closing an app moves its chip to the left zone, and a right-click pick brings a
+window to the mainstage.
 
 ## Attribution
 

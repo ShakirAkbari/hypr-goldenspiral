@@ -131,8 +131,11 @@ left column stretches (one half-height tile at 3 windows, the 2a/2b/2c split at
 
 - `ranked(ctx)`: reconcile `state.order` with live targets; return them
   ordered, plus the list of ids that came back from a drag.
-- `slots(area, n)`: pure function. given the work area and a count, return `n`
-  slot rectangles in rank order.
+- `slots(area, n, carve)`: pure function. given the work area, a count, and an
+  optional bar carve (`{main, left}` px lifted off the bottom of the mainstage
+  side and the left column), return `n` slot rectangles in rank order.
+- `bar_geometry(area)`: pure function. the pinned bar's bottom-right box and the
+  carve it implies.
 - `zone_rank(area, boxes, n, x, y)`: which zone front a point maps to (1, 2,
   or the first strip slot).
 - `place_returning(...)`: move each dropped window to its zone front; returns
@@ -144,6 +147,42 @@ left column stretches (one half-height tile at 3 windows, the 2a/2b/2c split at
 
 Keeping `slots()` pure makes the geometry easy to unit-test in plain Lua with a
 mock `ctx` (see `tests/`).
+
+## The app bar
+
+The bar is a normal window, not a layer-shell surface. That was a deliberate
+choice: a wlr-layer-shell exclusive zone can only reserve a whole screen edge,
+never a corner rectangle, so a layer-shell bar in the bottom-right corner would
+either reserve the entire bottom strip (wasting the two thirds it does not use)
+or reserve nothing and let windows tile under it. Making the bar an ordinary
+tiled window hands the whole problem to the layout, which already places
+rectangles for a living: `recalculate` gives the bar its own fixed box and
+carves that box out of what everyone else gets. No geometry file, no
+coordinate matching, one source of truth.
+
+The bar is recognised by window class (`state.bar.class`). `ranked` pulls that
+target out before building `state.order`, so the bar is never in the C and
+never counts toward `n`. `recalculate` then:
+
+1. `bar_geometry(area)` returns the bar box (bottom-right, `w_frac` wide,
+   `h_px` tall) and a carve. The carve is `{main = h_px}` always, plus
+   `{left = h_px}` only if the bar is wide enough to overlap the left column
+   (it is not, at the defaults).
+2. `bar_target:place(box)`.
+3. `slots(area, n, carve)` lifts the mainstage and the bottom strip by
+   `carve.main` and the left column by `carve.left`. With the default corner
+   bar the left column and everything to its left keep full height; only the
+   mainstage side rises.
+
+`state.bar.w_frac` and `h_px` default in the Lua but are overridden by
+`barWidthFraction` / `barHeight` in `~/.config/goldenspiral/bar.json`, which the
+bar also reads, so the tile the layout draws and the window the bar paints stay
+the same size. `read_bar_cfg` is the only impure part of the layout and is a
+no-op under `_G.GOLDENSPIRAL_TEST`.
+
+A `no_focus` window rule keeps the bar out of the focus cycle; it still arrives
+as a layout target. `border_size = 0` and `rounding = 0` drop the chrome the
+layout config would otherwise draw around it.
 
 ## Possible extensions
 

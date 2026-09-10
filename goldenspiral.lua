@@ -11,6 +11,11 @@
 -- (promote to mainstage, shuffle along the C, or drag a window and drop it in
 -- another zone). The whole layout reflows on every add/remove/re-rank.
 --
+-- Companion app bar (bar/chronobar.py): a normal window recognised by class,
+-- pinned to a fixed slot in the bottom-right corner and kept out of the C; the
+-- other windows lay out around it (see the `bar` block in `state` and
+-- `bar_geometry` / the `carve` argument to `slots`).
+--
 -- Drag-and-drop: Hyprland's Lua layout API has no drag hook. A drag pick-up
 -- floats the window, so on drop it comes back as a fresh target -- and any
 -- stable_id we've placed before is treated as a returning drop rather than a
@@ -46,7 +51,43 @@ local state = {
   drag_snap   = true,  -- honour a drag-and-drop; off = a dropped window just
                        -- goes back to the mainstage like any new window
   debug       = false, -- notify on each drop-zone placement
+
+  -- The chronobar app bar (bar/chronobar.py). Its window is recognised by
+  -- class, pinned to a fixed slot in the bottom-right corner, and kept out of
+  -- the C ranking; the other windows lay out around it. w_frac and h_px are
+  -- overridden by ~/.config/goldenspiral/bar.json if present so the bar renders
+  -- at the size it is placed.
+  bar = {
+    class  = "org.goldenspiral.chronobar",
+    w_frac = 0.3333,
+    h_px   = 150,
+    cmd    = "goldenspiral-bar",
+  },
 }
+
+-- Pull barWidthFraction / barHeight out of ~/.config/goldenspiral/bar.json.
+-- A tiny extractor, not a JSON parser: the file is a flat object written by the
+-- bar and the installer. Missing file or keys just leave the defaults.
+local function read_bar_cfg()
+  if _G.GOLDENSPIRAL_TEST then
+    return -- tests pin the defaults; no filesystem
+  end
+  local home = os.getenv("HOME") or ""
+  local f = io.open(home .. "/.config/goldenspiral/bar.json", "r")
+  if not f then
+    return
+  end
+  local body = f:read("*a") or ""
+  f:close()
+  local wf = body:match('"barWidthFraction"%s*:%s*([0-9.]+)')
+  local hp = body:match('"barHeight"%s*:%s*([0-9]+)')
+  if wf then
+    state.bar.w_frac = math.max(0.15, math.min(0.6, tonumber(wf)))
+  end
+  if hp then
+    state.bar.h_px = math.max(40, tonumber(hp))
+  end
+end
 
 local function clamp(x, lo, hi)
   return math.max(lo, math.min(hi, x))
@@ -84,9 +125,12 @@ end
 -- as a fresh target -- and is parked at the end for the caller to zone-place.
 local function ranked(ctx)
   local by_id, present = {}, {}
+  local bar_target
   for _, t in ipairs(ctx.targets) do
     local w = t.window
-    if w then
+    if w and w.class == state.bar.class then
+      bar_target = t                 -- pinned separately, never in the C
+    elseif w then
       by_id[w.stable_id] = t
       present[w.stable_id] = true
     end
@@ -141,32 +185,41 @@ local function ranked(ctx)
       out[#out + 1] = t
     end
   end
-  return out, returning
+  return out, returning, bar_target
 end
 
 -- Build N boxes in rank order for the work area `a` = {x, y, w, h}.
-local function slots(a, n)
+--
+-- `carve` (optional) blocks part of the bottom for the pinned app bar:
+--   carve.main  px removed from the bottom of the mainstage / bottom strip
+--   carve.left  px removed from the bottom of the left column
+-- The left column and the mainstage side are lifted independently, so a bar in
+-- the bottom-right corner leaves the left column full height.
+local function slots(a, n, carve)
   local X, Y, W, H = a.x, a.y, a.w, a.h
+  carve = carve or {}
+  local Hm = H - (carve.main or 0)     -- vertical space for the mainstage side
+  local Hl = H - (carve.left or 0)     -- vertical space for the left column
   local LW = W * state.left_frac       -- left column width
   local MW = W - LW                    -- mainstage / bottom-strip width
   local BH = H * state.bottom_frac     -- bottom strip height
-  local MH = H - BH                    -- mainstage height (when strip is shown)
+  local MH = Hm - BH                   -- mainstage height (when strip is shown)
 
   local out = {}
 
   -- Slot 1: mainstage. Full height until there's a bottom strip (>= 5 windows).
-  out[1] = { x = X + LW, y = Y, w = MW, h = (n >= 5) and MH or H }
+  out[1] = { x = X + LW, y = Y, w = MW, h = (n >= 5) and MH or Hm }
 
   -- Slots 2..4: left column (2a, 2b, 2c).
   if n == 2 then
-    out[2] = { x = X, y = Y, w = LW, h = H }
+    out[2] = { x = X, y = Y, w = LW, h = Hl }
   elseif n == 3 then
-    out[2] = { x = X, y = Y,             w = LW, h = H * 0.5 }
-    out[3] = { x = X, y = Y + H * 0.5,   w = LW, h = H * 0.5 }
+    out[2] = { x = X, y = Y,             w = LW, h = Hl * 0.5 }
+    out[3] = { x = X, y = Y + Hl * 0.5,  w = LW, h = Hl * 0.5 }
   elseif n >= 4 then
-    local h1 = H * state.top_split
-    local h2 = H * state.top_split
-    local h3 = H - h1 - h2
+    local h1 = Hl * state.top_split
+    local h2 = Hl * state.top_split
+    local h3 = Hl - h1 - h2
     out[2] = { x = X, y = Y,           w = LW, h = h1 }
     out[3] = { x = X, y = Y + h1,      w = LW, h = h2 }
     out[4] = { x = X, y = Y + h1 + h2, w = LW, h = h3 }
@@ -181,7 +234,7 @@ local function slots(a, n)
     local cols = math.min(n_bottom, max_cols)
     local rows = math.ceil(n_bottom / cols)
     local strip_h = BH * rows
-    local mh = math.max(H * 0.3, H - strip_h) -- keep the mainstage usable
+    local mh = math.max(Hm * 0.3, Hm - strip_h) -- keep the mainstage usable
     local cw = MW / cols
 
     out[1].h = mh
@@ -198,6 +251,18 @@ local function slots(a, n)
   end
 
   return out
+end
+
+-- The bar's pinned box and the carve it implies, for work area `a`.
+local function bar_geometry(a)
+  local bw = math.floor(a.w * state.bar.w_frac)
+  local bh = math.min(state.bar.h_px, math.floor(a.h * 0.5))
+  local box = { x = a.x + a.w - bw, y = a.y + a.h - bh, w = bw, h = bh }
+  local carve = { main = bh }
+  if box.x < a.x + a.w * state.left_frac then
+    carve.left = bh  -- the bar is wide enough to also overlap the left column
+  end
+  return box, carve
 end
 
 -- The layout is three drop zones: MAIN (the mainstage, top-right), SIDE (the
@@ -248,21 +313,36 @@ end
 
 hl.layout.register("goldenspiral", {
   recalculate = function(ctx)
-    local order, returning = ranked(ctx)
+    read_bar_cfg()
+    local order, returning, bar_target = ranked(ctx)
     local n = #order
+
+    -- Pin the app bar to the bottom-right corner and carve that corner out of
+    -- the area the other windows get.
+    local carve
+    if bar_target then
+      local box, cv = bar_geometry(ctx.area)
+      bar_target:place(box)
+      carve = cv
+    end
+
     if n == 0 then
       return
     end
 
     if n == 1 then
-      order[1]:place(ctx.area)
+      local a = ctx.area
+      if carve then
+        a = { x = a.x, y = a.y, w = a.w, h = a.h - carve.main }
+      end
+      order[1]:place(a)
       if order[1].window then
         state.seen[order[1].window.stable_id] = true
       end
       return
     end
 
-    local boxes = slots(ctx.area, n)
+    local boxes = slots(ctx.area, n, carve)
 
     -- send any just-dropped window to the front of its drop zone
     if #returning > 0 then
@@ -347,3 +427,21 @@ o.bind("SUPER + MINUS", "Spiral: narrow mainstage", hl.dsp.layout("shrink"))
 o.bind("SUPER + BRACKETRIGHT", "Spiral: shrink bottom strip", hl.dsp.layout("taller"))
 o.bind("SUPER + BRACKETLEFT", "Spiral: grow bottom strip", hl.dsp.layout("shorter"))
 o.bind("SUPER + 0", "Spiral: reset proportions", hl.dsp.layout("reset"))
+
+-- The app bar (bar/chronobar.py). It is a normal tiled window that recalculate
+-- pins to the corner; it must not take focus and wants no chrome of its own.
+hl.window_rule({
+  match = { class = state.bar.class },
+  no_focus = true,
+  no_shadow = true,
+  border_size = 0,
+  rounding = 0,
+})
+
+-- Launch it once at session start. On a setup without hl.on, add instead:
+--   exec-once = goldenspiral-bar
+if type(hl.on) == "function" then
+  hl.on("hyprland.start", function()
+    hl.exec_cmd(state.bar.cmd)
+  end)
+end

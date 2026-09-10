@@ -6,12 +6,31 @@ based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **App bar** (`bar/chronobar.py`): a small GTK4 window, app id
+  `org.goldenspiral.chronobar`, that the layout pins to a fixed slot in the
+  bottom-right corner. Two zones split by a divider: recently closed apps on
+  the left (newest first, only ones that resolve to a desktop entry), apps with
+  a live window on the right (newest at the corner, with a per-window count
+  badge). Left-click a chip to launch a new instance; right-click a right-zone
+  chip for a menu of that app's windows and pick one to pull it onto the
+  current workspace and `promote` it. Config at `~/.config/goldenspiral/bar.json`.
+- Layout support for the bar: `ranked` sets the bar target aside,
+  `bar_geometry(area)` places it in the corner, and `slots(area, n, carve)`
+  lifts the mainstage and bottom strip above it while the left column keeps
+  full height. New `state.bar` config; `barWidthFraction` / `barHeight` in
+  `bar.json` feed `bar.w_frac` / `bar.h_px`.
+- A `no_focus` window rule for the bar and a `hl.on("hyprland.start")` launch
+  of `goldenspiral-bar`.
+- `install.sh`: symlinks the layout, installs `bar/chronobar.py` as
+  `~/.local/bin/goldenspiral-bar`, seeds `bar.json`.
 - CI (`.github/workflows/ci.yml`): runs the Lua geometry tests and
   `tests/no-fancy-dashes.sh`, which fails on any em or en dash in a tracked
   file.
 
 ### Changed
 - Docs and comments now use plain ASCII punctuation only (no em or en dashes).
+- `slots` takes an optional third `carve` argument; called with two arguments
+  it behaves exactly as before.
 
 ## [0.2.0] - 2026-09-08
 
