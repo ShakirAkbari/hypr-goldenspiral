@@ -165,24 +165,33 @@ class Apps:
     def __init__(self):
         self._cache = {}
         self._by_wmclass = {}
+        self._by_id = {}
         self._index()
 
     def _index(self):
         self._by_wmclass.clear()
+        self._by_id.clear()
         for info in Gio.AppInfo.get_all():
             if not isinstance(info, Gio.DesktopAppInfo):
                 continue
             wm = info.get_string("StartupWMClass")
             if wm:
                 self._by_wmclass[wm.lower()] = info
+            desktop_id = info.get_id() or ""
+            if desktop_id.endswith(".desktop"):
+                self._by_id[desktop_id[: -len(".desktop")].lower()] = info
 
     def lookup(self, cls):
         if not cls:
             return None
+        # cls arrives already lowercased (callers key everything on it), so
+        # this can't try the exact case an app's real .desktop id uses (e.g.
+        # "org.gnome.Nautilus.desktop" for a reported class of
+        # "org.gnome.nautilus"). _by_id matches case-insensitively instead.
         key = cls.lower()
         if key in self._cache:
             return self._cache[key]
-        info = self._by_wmclass.get(key)
+        info = self._by_wmclass.get(key) or self._by_id.get(key)
         if info is None:
             for cand in (cls, key, key.split(".")[-1], key.split("-")[0]):
                 try:
@@ -193,7 +202,7 @@ class Apps:
                     break
         if info is None:
             self._index()  # a new app may have been installed
-            info = self._by_wmclass.get(key)
+            info = self._by_wmclass.get(key) or self._by_id.get(key)
         self._cache[key] = info
         return info
 
