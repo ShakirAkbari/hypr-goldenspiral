@@ -386,7 +386,9 @@ class Chronobar(Gtk.Application):
         div.set_visible(bool(closed) and bool(opened))
         glass.append(div)
 
-        glass.append(self._zone("open", opened, Gtk.Align.END, counts=True))
+        # newest nearest the corner: the strip packs start-to-end, and this
+        # zone's right edge IS the corner, so reverse before appending.
+        glass.append(self._zone("open", list(reversed(opened)), Gtk.Align.END, counts=True))
         self.root.append(glass)
 
     def _zone(self, label, classes, halign, counts):
