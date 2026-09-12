@@ -168,6 +168,13 @@ Config: `~/.config/goldenspiral/bar.json`, hot-reloaded. `barWidthFraction` and
 draws. Other keys: `iconSize`, `gap`, `maxOpen`, `maxClosed`, `showNames`,
 `showCounts`, `zoneLabels`, `promoteOnPick`.
 
+The bar is a normal window, so it only ever lives on one workspace at a time.
+On a multi-monitor setup, set `homeMonitor` (a monitor name like `"DP-3"`, or
+`"desc:<substring>"` to match by description instead of port) to have it
+silently follow whichever workspace is active on that monitor, so it stays
+visible no matter which workspace you switch to there. Leave it empty
+(default) and it just stays put like any other window.
+
 ## Tuning
 
 Edit the `state` table at the top of `goldenspiral.lua`:

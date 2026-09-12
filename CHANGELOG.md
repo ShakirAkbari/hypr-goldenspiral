@@ -14,6 +14,11 @@ based on [Keep a Changelog](https://keepachangelog.com/).
   badge). Left-click a chip to launch a new instance; right-click a right-zone
   chip for a menu of that app's windows and pick one to pull it onto the
   current workspace and `promote` it. Config at `~/.config/goldenspiral/bar.json`.
+- `homeMonitor` config key: on a multi-monitor setup, the bar silently follows
+  whichever workspace is active on the named monitor (by name or
+  `desc:<substring>`), so it stays visible no matter which workspace you
+  switch to there. Empty by default (stays on whatever workspace it mapped on,
+  like any other window).
 - Layout support for the bar: `ranked` sets the bar target aside,
   `bar_geometry(area)` places it in the corner, and the bottom-row strip
   columns over the bar's x-range stop above it while everything else ignores

@@ -18,6 +18,11 @@ One chip per application. Left-click launches a new instance. Right-click a
 right-zone chip for a menu of that app's windows; pick one to pull it onto the
 current workspace and promote it to the goldenspiral mainstage.
 
+Set "homeMonitor" in the config to keep the bar on one physical monitor
+regardless of which workspace is active there (e.g. "DP-3" or
+"desc:some monitor description"). Empty (default): the bar just stays on
+whichever workspace it was on when it last mapped, like any other window.
+
 Config (hot-reloaded): ~/.config/goldenspiral/bar.json
 
 MIT License, Copyright (c) 2026 Shakir Akbari.
@@ -50,6 +55,7 @@ DEFAULTS = {
     "showCounts": True,
     "zoneLabels": True,
     "promoteOnPick": True,
+    "homeMonitor": "",
 }
 
 
@@ -98,6 +104,15 @@ class Hypr:
     def focus_workspace_id(self):
         ws = self.json("activeworkspace")
         return ws.get("id") if isinstance(ws, dict) else None
+
+    def move_to_workspace_silent(self, address, ws):
+        if self.lua:
+            self.dispatch(
+                'hl.dsp.window.move({ window = "address:%s", workspace = "%s", '
+                "follow = false })" % (address, ws)
+            )
+        else:
+            self.dispatch("movetoworkspacesilent %s,address:%s" % (ws, address))
 
     def bring_to_mainstage(self, address, promote):
         ws = self.focus_workspace_id()
@@ -341,7 +356,15 @@ class Chronobar(Gtk.Application):
                 if any(w["address"] == addr for w in wins):
                     self.model.bump(cls)
                     break
-        if name in ("activewindowv2", "openwindow", "closewindow", "movewindowv2"):
+        if name in (
+            "activewindowv2",
+            "openwindow",
+            "closewindow",
+            "movewindowv2",
+            "workspacev2",
+            "focusedmonv2",
+            "moveworkspacev2",
+        ):
             self._queue_refresh()
         return False
 
@@ -356,7 +379,33 @@ class Chronobar(Gtk.Application):
         clients = self.hypr.json("clients") or []
         self.model.recompute(clients, lambda c: self.apps.lookup(c) is not None)
         self._rebuild()
+        self._follow_home_monitor(clients)
         return False
+
+    # -- stick to a monitor regardless of which workspace is active there --
+    def _follow_home_monitor(self, clients):
+        home = self.cfg.get("homeMonitor") or ""
+        if not home:
+            return
+        mine = next(
+            (c for c in clients if (c.get("class") or "").lower() == APP_ID.lower()), None
+        )
+        if not mine:
+            return
+        target_ws = None
+        for m in self.hypr.json("monitors") or []:
+            name, desc = m.get("name") or "", m.get("description") or ""
+            matched = (
+                home[5:].strip().lower() in desc.lower()
+                if home.startswith("desc:")
+                else name == home
+            )
+            if matched:
+                target_ws = (m.get("activeWorkspace") or {}).get("id")
+                break
+        my_ws = (mine.get("workspace") or {}).get("id")
+        if target_ws is not None and my_ws != target_ws:
+            self.hypr.move_to_workspace_silent(mine["address"], target_ws)
 
     # -- rendering --
     def _rebuild(self):
