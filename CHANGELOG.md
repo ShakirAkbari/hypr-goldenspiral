@@ -6,36 +6,31 @@ based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
-- **App bar** (`bar/chronobar.py`): a small GTK4 window, app id
-  `org.goldenspiral.chronobar`, that the layout pins to a fixed slot in the
-  bottom-right corner. Two zones split by a divider: recently closed apps on
-  the left (newest first, only ones that resolve to a desktop entry), apps with
-  a live window on the right (newest at the corner, with a per-window count
-  badge). Left-click a chip to launch a new instance; right-click a right-zone
-  chip for a menu of that app's windows and pick one to pull it onto the
-  current workspace and `promote` it. Config at `~/.config/goldenspiral/bar.json`.
-- `homeMonitor` config key: on a multi-monitor setup, the bar silently follows
-  whichever workspace is active on the named monitor (by name or
-  `desc:<substring>`), so it stays visible no matter which workspace you
-  switch to there. Empty by default (stays on whatever workspace it mapped on,
-  like any other window).
-- `workspace` config key: scopes golden-spiral (and the app bar) to a single
-  workspace via `hl.workspace_rule`, instead of making it the global layout.
-  Every other workspace keeps Hyprland's normal default layout. Empty by
-  default (global, unchanged behavior for existing users); when set, the bar's
-  window rule also pins it there silently.
-- Layout support for the bar: `ranked` sets the bar target aside,
-  `bar_geometry(area)` places it in the corner, and the bottom-row strip
-  columns over the bar's x-range stop above it while everything else ignores
-  it. New `state.bar` config; `barWidthFraction` / `barHeight` in `bar.json`
-  feed `bar.w_frac` / `bar.h_px`.
-- A `no_focus` window rule for the bar and a `hl.on("hyprland.start")` launch
-  of `goldenspiral-bar`.
-- `install.sh`: symlinks the layout, installs `bar/chronobar.py` as
-  `~/.local/bin/goldenspiral-bar`, seeds `bar.json`.
+- **App bar cooperation**: the layout carves its bottom-right corner out of
+  the work area for [hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar),
+  a separate, standalone project you install independently. `recalculate`
+  reads the rectangle chronobar publishes to
+  `~/.cache/hypr-chronobar/geometry.json` (`read_bar_geometry`); the
+  bottom-row strip columns over its x-range stop above it, and everything
+  else ignores it. No configuration needed on this side; the layout works
+  identically with the bar absent.
+- `workspace` config key: scopes golden-spiral to a single workspace via
+  `hl.workspace_rule`, instead of making it the global layout. Every other
+  workspace keeps Hyprland's normal default layout. Empty by default (global,
+  unchanged behavior for existing users).
 - CI (`.github/workflows/ci.yml`): runs the Lua geometry tests and
   `tests/no-fancy-dashes.sh`, which fails on any em or en dash in a tracked
   file.
+
+### Removed
+- The vendored `bar/chronobar.py` (a GTK4 reimplementation of the app bar,
+  recognised by window class and pinned into the layout as a tiled target)
+  and its `homeMonitor` config key. It never shipped in a release: it
+  duplicated [hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar),
+  drifted from that project's bug fixes almost immediately, and solved a
+  non-problem (see `docs/DESIGN.md`, "The app bar"). `barWidthFraction` /
+  `barHeight` in `~/.config/goldenspiral/bar.json` went with it; the carve
+  size now comes straight from chronobar's own published geometry.
 
 ### Changed
 - Docs and comments now use plain ASCII punctuation only (no em or en dashes).

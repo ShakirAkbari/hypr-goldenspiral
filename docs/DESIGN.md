@@ -142,8 +142,8 @@ the 4th window.
   optional `carve` (`{bar_w, bar_h}`, the app bar's footprint in the
   bottom-right corner), return `n` slot rectangles in rank order. `carve` only
   shortens the bottom-row strip columns that sit over the bar.
-- `bar_geometry(area)`: pure function. the pinned bar's bottom-right box and its
-  footprint.
+- `read_bar_geometry()`: impure. chronobar's published `bar_w, bar_h`, from
+  `~/.cache/hypr-chronobar/geometry.json`, or `nil` if it is not running.
 - `zone_rank(area, boxes, n, x, y)`: which zone front a point maps to (1, 2,
   or the first strip slot).
 - `place_returning(...)`: move each dropped window to its zone front; returns
@@ -158,45 +158,46 @@ mock `ctx` (see `tests/`).
 
 ## The app bar
 
-The bar is a normal window, not a layer-shell surface. That was a deliberate
-choice: a wlr-layer-shell exclusive zone can only reserve a whole screen edge,
-never a corner rectangle, so a layer-shell bar in the bottom-right corner would
-either reserve the entire bottom strip (wasting the two thirds it does not use)
-or reserve nothing and let windows tile under it. Making the bar an ordinary
-tiled window hands the whole problem to the layout, which already places
-rectangles for a living: `recalculate` gives the bar its own fixed box and
-carves that box out of what everyone else gets. No geometry file, no
-coordinate matching, one source of truth.
+The bar (github.com/ShakirAkbari/hypr-chronobar) is a separate project, run
+standalone or alongside goldenspiral. An earlier revision vendored its own
+copy of the bar as a plain tiled window (`bar/chronobar.py`) so `recalculate`
+could `:place()` it into a fixed box like any other target -- a wlr-layer-shell
+exclusive zone can only reserve a whole screen edge, never a corner rectangle,
+so a real layer-shell bar seemed to need either wasting the bottom strip's
+unused two thirds or letting windows tile under it. That reasoning missed that
+the layout does not need Wayland's exclusive-zone mechanism at all: it can
+carve an arbitrary rectangle out of the area it hands to `slots` regardless of
+who owns that rectangle on screen. Vendoring a whole second bar implementation
+to solve a non-problem was needless duplication, and it drifted from the real
+project's bug fixes almost immediately. It has been removed.
 
-The bar is recognised by window class (`state.bar.class`). `ranked` pulls that
-target out before building `state.order`, so the bar is never in the C and
-never counts toward `n`. `recalculate` then:
+chronobar is a genuine Quickshell layer-shell panel; it positions itself and
+is never a target this layout sees. It publishes its rectangle (monitor-local
+pixels) to `~/.cache/hypr-chronobar/geometry.json` on every resize.
+`read_bar_geometry` reads that file -- a flat `{monitor: {x,y,width,height}}`
+object -- and picks the largest rectangle (first, on a tie), since the
+custom-layout API gives `recalculate` no way to know which physical monitor
+it is drawing on. `recalculate` then:
 
-1. `bar_geometry(area)` returns the bar box (bottom-right, `w_frac` wide,
-   `h_px` tall) and its footprint `{bar_w, bar_h}`.
-2. `bar_target:place(box)`.
-3. `slots(area, n, footprint)` places the rest. The mainstage rises because the
-   strip band below it is now tall, not because of the bar directly. The bar
-   only reshapes the strip's bottom row: it is split at the bar's left edge
-   into a left part whose columns run to the floor and a right part (exactly
-   the bar's width) whose columns stop at the bar's top edge. A column edge
-   lands on the bar's left edge, so no tile overlaps the bar. Rows wrapped
-   above the bottom one ignore the bar entirely.
+1. `read_bar_geometry()` returns `bar_w, bar_h`, or `nil` if the bar is not
+   running.
+2. `slots(area, n, {bar_w, bar_h})` places the rest. The mainstage rises
+   because the strip band below it is now tall, not because of the bar
+   directly. The bar only reshapes the strip's bottom row: it is split at the
+   bar's left edge into a left part whose columns run to the floor and a right
+   part (exactly the bar's width) whose columns stop at the bar's top edge. A
+   column edge lands on the bar's left edge, so no tile overlaps the bar. Rows
+   wrapped above the bottom one ignore the bar entirely.
 
 The left column never sees the bar or the strip: it is always two full-height
 boxes to the left of everything. That is the point of capping it at two, so the
 "second biggest window" has one fixed home (rank 2, top-left) instead of
 drifting down a three-tile stack.
 
-`state.bar.w_frac` and `h_px` default in the Lua but are overridden by
-`barWidthFraction` / `barHeight` in `~/.config/goldenspiral/bar.json`, which the
-bar also reads, so the tile the layout draws and the window the bar paints stay
-the same size. `read_bar_cfg` is the only impure part of the layout and is a
-no-op under `_G.GOLDENSPIRAL_TEST`.
-
-A `no_focus` window rule keeps the bar out of the focus cycle; it still arrives
-as a layout target. `border_size = 0` and `rounding = 0` drop the chrome the
-layout config would otherwise draw around it.
+`read_bar_geometry` and `read_bar_cfg` are the only impure parts of the
+layout; both are no-ops under `_G.GOLDENSPIRAL_TEST` (the latter reads
+`~/.config/goldenspiral/bar.json`'s `workspace` key, the former is overridden
+by `_G.GOLDENSPIRAL_TEST_BAR = {w, h}`).
 
 ## Possible extensions
 

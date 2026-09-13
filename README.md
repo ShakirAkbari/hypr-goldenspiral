@@ -51,9 +51,10 @@ With 2-3 windows there's no strip: the mainstage takes the whole right side
 (above the bar) and the left column holds one box (n=2) or both (n=3, split at
 `left_split`).
 
-It ships with a companion **app bar** (`bar/chronobar.py`): a normal window that
-the layout recognises by class and pins to a fixed slot in the bottom-right
-corner, laying the other windows out around it. See [App bar](#app-bar) below.
+It pairs well with a companion **app bar**,
+[hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar): a separate
+project you install on its own. When it's running, goldenspiral automatically
+keeps tiles out of its bottom-right corner. See [App bar](#app-bar) below.
 
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the reasoning behind every part of
 this.
@@ -64,8 +65,9 @@ this.
   provides `hl.layout.register` and the `hl` / `o` config globals. This is what
   [Omarchy](https://omarchy.org) ships. A plain `hyprland.conf` setup would need
   the equivalent Lua entrypoint.
-- For the app bar only: **python** with **PyGObject** and **GTK 4**. The layout
-  itself has no dependencies; skip the bar and it is still one Lua file.
+- The layout itself has no dependencies; it's one Lua file. The app bar is a
+  separate install -- see [hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar)
+  for its own requirements.
 
 ## Install
 
@@ -75,10 +77,8 @@ cd hypr-goldenspiral
 ./install.sh
 ```
 
-`install.sh` symlinks `goldenspiral.lua` into `~/.config/hypr/hypr/`, installs
-`bar/chronobar.py` as `~/.local/bin/goldenspiral-bar`, and seeds
-`~/.config/goldenspiral/bar.json`. A `git pull` then updates everything in
-place.
+`install.sh` symlinks `goldenspiral.lua` into `~/.config/hypr/hypr/`. A
+`git pull` then updates it in place.
 
 Then require it **after** whatever sets `general:layout`, so it wins:
 
@@ -92,11 +92,11 @@ hyprctl reload
 hyprctl configerrors   # expect no output
 ```
 
-The layout registers itself, sets `general.layout = "lua:goldenspiral"`, binds
-the controls below, adds a window rule for the bar, and (where `hl.on` is
-available) launches `goldenspiral-bar` at session start. Want the layout only?
-Just `cp goldenspiral.lua ~/.config/hypr/hypr/` and skip `install.sh`; the bar
-launch and window rule no-op when the bar is not running.
+The layout registers itself, sets `general.layout = "lua:goldenspiral"`, and
+binds the controls below. Want the app bar too? Install
+[hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar) separately
+(it has its own installer and autostarts itself); goldenspiral needs no
+configuration to cooperate with it, and works identically with it absent.
 
 ## Keybinds
 
@@ -141,39 +141,21 @@ notification showing the rank each drop resolved to.
 
 ## App bar
 
-`bar/chronobar.py` is a small GTK4 window (app id
-`org.goldenspiral.chronobar`). It is not a layer-shell surface: `recalculate`
-spots the target with that class, pins it to a fixed slot in the bottom-right
-corner (`bar.w_frac` of the work area wide, `bar.h_px` tall), keeps it out of
-the C ranking. The mainstage stops above the bar, or above the strip once one
-forms; the strip's bottom row is split at the bar's left edge so no tile
-overlaps it. The left column is never touched by the bar. `install.sh` sets it
-to launch at session start and adds a `no_focus` window rule.
+[hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar) is a
+separate project: a time-ordered dock that runs as its own Quickshell
+layer-shell panel in the bottom-right corner. Install it independently
+(it has its own repo, README and installer); goldenspiral needs no
+configuration to cooperate with it.
 
-It shows two zones, split by a divider:
-
-- **left, recently closed.** An app lands here when its last window closes
-  (and it resolves to a desktop entry, so the chip can relaunch it); newest
-  close is leftmost. It leaves the instant the app is reopened.
-- **right, open now.** One chip per app with a live window, newest nearest the
-  corner, with a count badge when an app has more than one window.
-
-| Action | Result |
-| --- | --- |
-| Left-click a chip | launch a new instance |
-| Right-click a right-zone chip | menu of that app's windows; pick one to pull it onto the current workspace and `promote` it to the mainstage |
-
-Config: `~/.config/goldenspiral/bar.json`, hot-reloaded. `barWidthFraction` and
-`barHeight` there are also read by the layout so the tile matches what the bar
-draws. Other keys: `iconSize`, `gap`, `maxOpen`, `maxClosed`, `showNames`,
-`showCounts`, `zoneLabels`, `promoteOnPick`.
-
-The bar is a normal window, so it only ever lives on one workspace at a time.
-On a multi-monitor setup, set `homeMonitor` (a monitor name like `"DP-3"`, or
-`"desc:<substring>"` to match by description instead of port) to have it
-silently follow whichever workspace is active on that monitor, so it stays
-visible no matter which workspace you switch to there. Leave it empty
-(default) and it just stays put like any other window.
+goldenspiral reads the rectangle chronobar publishes to
+`~/.cache/hypr-chronobar/geometry.json` and carves it out of the work area:
+the mainstage stops above it, or above the strip once one forms, and the
+strip's bottom row is split at its left edge so no tile overlaps it. The left
+column is never touched by the bar. There's no window to recognise or pin --
+chronobar is a layer-shell surface, positions itself, and is never a tiled
+target -- so nothing here breaks if you don't install it, and nothing over
+there depends on goldenspiral either. See hypr-chronobar's own README for its
+zones, config and keybinds.
 
 ## Tuning
 
@@ -186,9 +168,6 @@ Edit the `state` table at the top of `goldenspiral.lua`:
 | `left_split` | `0.66` | top-left box's share of the left column when there is no strip (with a strip the split follows the mainstage bottom) |
 | `min_tile_w` | `0.18` | bottom-strip tiles never get narrower than this; extra windows wrap to new rows |
 | `drag_snap` | `true` | send a dragged-and-dropped window to the front of its drop zone |
-| `bar.class` | `org.goldenspiral.chronobar` | window class the layout pins to the corner |
-| `bar.w_frac` | `0.3333` | pinned bar width as a fraction of the work area (overridden by `barWidthFraction` in `bar.json`) |
-| `bar.h_px` | `150` | pinned bar height in pixels (overridden by `barHeight` in `bar.json`) |
 
 ## How it works
 
@@ -196,11 +175,11 @@ Edit the `state` table at the top of `goldenspiral.lua`:
 mainstage. Each `recalculate`:
 
 1. `ranked(ctx)` reconciles that list with the live targets: prunes closed
-   windows, front-inserts genuinely new ones (newest first), sets aside the
-   app-bar target (`bar.class`) to pin separately, and parks any *returning*
-   window (a known id handed back as fresh, i.e. a drop) at the end for step 3.
-2. If the bar is present, `bar_geometry(area)` gives its bottom-right box and
-   the carve it implies; `bar_target:place(box)`.
+   windows, front-inserts genuinely new ones (newest first), and parks any
+   *returning* window (a known id handed back as fresh, i.e. a drop) at the
+   end for step 3.
+2. `read_bar_geometry()` reads chronobar's published rectangle, if it's
+   running, giving the carve for step 3.
 3. `slots(area, n, carve)`, a pure function, returns `n` slot rectangles in
    rank order for the work area, window count, and the bar carve.
 4. `place_returning` moves each dropped window to the front of its drop zone
@@ -216,7 +195,7 @@ mainstage. Each `recalculate`:
 
 `tests/geometry_spec.lua` mocks the config API, loads the layout, and asserts on
 the placement logic (ranking, promote, swap, new-window-takes-mainstage,
-row-wrap, small-N, and the app-bar pin and carve). Runs under any Lua 5.x:
+row-wrap, small-N, and the app-bar carve). Runs under any Lua 5.x:
 
 ```sh
 lua tests/geometry_spec.lua

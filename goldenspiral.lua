@@ -11,10 +11,12 @@
 -- (promote to mainstage, shuffle along the C, or drag a window and drop it in
 -- another zone). The whole layout reflows on every add/remove/re-rank.
 --
--- Companion app bar (bar/chronobar.py): a normal window recognised by class,
--- pinned to a fixed slot in the bottom-right corner and kept out of the C; the
--- other windows lay out around it (see the `bar` block in `state` and
--- `bar_geometry` / the `carve` argument to `slots`).
+-- Companion app bar (github.com/ShakirAkbari/hypr-chronobar): a separate,
+-- self-installed Quickshell dock. It is a layer-shell surface, so it is
+-- never a tiled target this layout can place -- instead it publishes its own
+-- rectangle to ~/.cache/hypr-chronobar/geometry.json and this layout carves
+-- that corner out of the area the C gets (see `read_bar_geometry` and the
+-- `carve` argument to `slots`).
 --
 -- Drag-and-drop: Hyprland's Lua layout API has no drag hook. A drag pick-up
 -- floats the window, so on drop it comes back as a fresh target -- and any
@@ -59,26 +61,14 @@ local state = {
   -- Which workspace golden-spiral is scoped to, or "" (default) to make it
   -- the global layout on every workspace, as before. Set via `"workspace"` in
   -- ~/.config/goldenspiral/bar.json. When set, every other workspace keeps
-  -- Hyprland's normal default layout and only this one workspace -- and the
-  -- chronobar app bar -- uses golden-spiral.
+  -- Hyprland's normal default layout and only this one workspace uses
+  -- golden-spiral.
   workspace   = "",
-
-  -- The chronobar app bar (bar/chronobar.py). Its window is recognised by
-  -- class, pinned to a fixed slot in the bottom-right corner, and kept out of
-  -- the C ranking; the other windows lay out around it. w_frac and h_px are
-  -- overridden by ~/.config/goldenspiral/bar.json if present so the bar renders
-  -- at the size it is placed.
-  bar = {
-    class  = "org.goldenspiral.chronobar",
-    w_frac = 0.3333,
-    h_px   = 150,
-    cmd    = "goldenspiral-bar",
-  },
 }
 
--- Pull barWidthFraction / barHeight out of ~/.config/goldenspiral/bar.json.
--- A tiny extractor, not a JSON parser: the file is a flat object written by the
--- bar and the installer. Missing file or keys just leave the defaults.
+-- Pull "workspace" out of ~/.config/goldenspiral/bar.json. A tiny extractor,
+-- not a JSON parser: the file is a flat object written by the installer.
+-- Missing file or key just leaves the default.
 local function read_bar_cfg()
   if _G.GOLDENSPIRAL_TEST then
     return -- tests pin the defaults; no filesystem
@@ -90,18 +80,42 @@ local function read_bar_cfg()
   end
   local body = f:read("*a") or ""
   f:close()
-  local wf = body:match('"barWidthFraction"%s*:%s*([0-9.]+)')
-  local hp = body:match('"barHeight"%s*:%s*([0-9]+)')
   local ws = body:match('"workspace"%s*:%s*"([^"]*)"')
-  if wf then
-    state.bar.w_frac = math.max(0.15, math.min(0.6, tonumber(wf)))
-  end
-  if hp then
-    state.bar.h_px = math.max(40, tonumber(hp))
-  end
   if ws then
     state.workspace = ws
   end
+end
+
+-- Read chronobar's published rectangle from
+-- ~/.cache/hypr-chronobar/geometry.json (github.com/ShakirAkbari/hypr-chronobar):
+-- a flat { "<monitor>": {x, y, width, height}, ... } object, in monitor-local
+-- pixels, that the bar rewrites on every resize/reconfigure. This layout has
+-- no notion of which physical monitor it is drawing on (the custom-layout API
+-- doesn't pass one in), so on a multi-monitor setup it just carves out the
+-- largest published rectangle (first, on a tie) -- exactly right for a
+-- single-monitor setup, an approximation everywhere else.
+-- Returns bar_w, bar_h, or nil, nil if the bar isn't running.
+local function read_bar_geometry()
+  if _G.GOLDENSPIRAL_TEST then
+    local g = _G.GOLDENSPIRAL_TEST_BAR
+    return g and g.w, g and g.h
+  end
+  local home = os.getenv("HOME") or ""
+  local f = io.open(home .. "/.cache/hypr-chronobar/geometry.json", "r")
+  if not f then
+    return nil, nil
+  end
+  local body = f:read("*a") or ""
+  f:close()
+  local best_w, best_h, best_area
+  for block in body:gmatch("{[^{}]*}") do
+    local w = tonumber(block:match('"width"%s*:%s*([0-9.]+)'))
+    local h = tonumber(block:match('"height"%s*:%s*([0-9.]+)'))
+    if w and h and (not best_area or w * h > best_area) then
+      best_w, best_h, best_area = w, h, w * h
+    end
+  end
+  return best_w, best_h
 end
 
 local function clamp(x, lo, hi)
@@ -140,12 +154,9 @@ end
 -- as a fresh target -- and is parked at the end for the caller to zone-place.
 local function ranked(ctx)
   local by_id, present = {}, {}
-  local bar_target
   for _, t in ipairs(ctx.targets) do
     local w = t.window
-    if w and w.class == state.bar.class then
-      bar_target = t                 -- pinned separately, never in the C
-    elseif w then
+    if w then
       by_id[w.stable_id] = t
       present[w.stable_id] = true
     end
@@ -200,7 +211,7 @@ local function ranked(ctx)
       out[#out + 1] = t
     end
   end
-  return out, returning, bar_target
+  return out, returning
 end
 
 -- Build N boxes in rank order for the work area `a` = {x, y, w, h}.
@@ -310,14 +321,6 @@ local function slots(a, n, carve)
   return out
 end
 
--- The bar's pinned box (bottom-right corner) and its footprint, for area `a`.
-local function bar_geometry(a)
-  local bw = math.floor(a.w * state.bar.w_frac)
-  local bh = math.min(state.bar.h_px, math.floor(a.h * 0.5))
-  local box = { x = a.x + a.w - bw, y = a.y + a.h - bh, w = bw, h = bh }
-  return box, { bar_w = bw, bar_h = bh }
-end
-
 -- The layout is three drop zones: MAIN (the mainstage, top-right), SIDE (the
 -- whole left column) and BOTTOM (the strip under the mainstage). A window
 -- dropped in a zone goes to the *front* of that zone -- rank 1, rank 2, or the
@@ -367,16 +370,16 @@ end
 hl.layout.register("goldenspiral", {
   recalculate = function(ctx)
     read_bar_cfg()
-    local order, returning, bar_target = ranked(ctx)
+    local order, returning = ranked(ctx)
     local n = #order
 
-    -- Pin the app bar to the bottom-right corner and carve that corner out of
-    -- the area the other windows get.
+    -- Carve the bottom-right corner out of the area for chronobar, if it is
+    -- running. It self-positions (it's a layer-shell surface); this only
+    -- keeps tiles from overlapping it.
     local carve
-    if bar_target then
-      local box, cv = bar_geometry(ctx.area)
-      bar_target:place(box)
-      carve = cv
+    local bar_w, bar_h = read_bar_geometry()
+    if bar_w then
+      carve = { bar_w = bar_w, bar_h = bar_h }
     end
 
     if n == 0 then
@@ -487,26 +490,7 @@ o.bind("SUPER + BRACKETRIGHT", "Spiral: shrink bottom strip", hl.dsp.layout("tal
 o.bind("SUPER + BRACKETLEFT", "Spiral: grow bottom strip", hl.dsp.layout("shorter"))
 o.bind("SUPER + R", "Spiral: reset proportions", hl.dsp.layout("reset"))
 
--- The app bar (bar/chronobar.py). It is a normal tiled window that recalculate
--- pins to the corner; it must not take focus and wants no chrome of its own.
--- When golden-spiral is scoped to one workspace, the bar belongs there too --
--- pinned silently so mapping it doesn't yank focus to that workspace.
-local bar_rule = {
-  match = { class = state.bar.class },
-  no_focus = true,
-  no_shadow = true,
-  border_size = 0,
-  rounding = 0,
-}
-if state.workspace ~= "" then
-  bar_rule.workspace = state.workspace .. " silent"
-end
-hl.window_rule(bar_rule)
-
--- Launch it once at session start. On a setup without hl.on, add instead:
---   exec-once = goldenspiral-bar
-if type(hl.on) == "function" then
-  hl.on("hyprland.start", function()
-    hl.exec_cmd(state.bar.cmd)
-  end)
-end
+-- The app bar (github.com/ShakirAkbari/hypr-chronobar) is installed and
+-- launched independently of this layout -- see its own README for the
+-- exec-once line. This layout only reads its published geometry (see
+-- `read_bar_geometry`) to keep tiles out of its corner.

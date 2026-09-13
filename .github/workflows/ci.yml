@@ -16,6 +16,3 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq lua5.4
           lua5.4 tests/geometry_spec.lua
-
-      - name: App bar compiles
-        run: python3 -m py_compile bar/chronobar.py

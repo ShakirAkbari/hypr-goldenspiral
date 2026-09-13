@@ -5,17 +5,17 @@ Small project, informal process. Issues and PRs welcome.
 ## Ground rules
 
 - The layout is one file, `goldenspiral.lua`, with no runtime dependencies
-  beyond Hyprland's Lua config API. Keep it that way. The optional app bar is
-  one more file, `bar/chronobar.py` (python + PyGObject + GTK 4); the layout
-  must still work with the bar absent.
+  beyond Hyprland's Lua config API. Keep it that way. The app bar
+  (github.com/ShakirAkbari/hypr-chronobar) is a separate project entirely; the
+  layout must still work with it absent, and must not gain a vendored copy of
+  it again -- see `docs/DESIGN.md`'s "The app bar" section for why one existed
+  briefly and was removed.
 - `slots(area, n, carve)` must stay a **pure function** (work area, count, and
-  the optional bar carve in; slot rectangles out). `bar_geometry(area)` is also
-  pure. All state lives in the `state` table; all state changes go through
-  `layout_msg`. This is what keeps the geometry testable. `read_bar_cfg` is the
-  one impure helper and is skipped under `_G.GOLDENSPIRAL_TEST`.
-- The bar's file read and the layout's must agree on `~/.config/goldenspiral/bar.json`:
-  `barWidthFraction` and `barHeight` size the pinned tile, the rest configure
-  rendering.
+  the optional bar carve in; slot rectangles out). All state lives in the
+  `state` table; all state changes go through `layout_msg`. This is what keeps
+  the geometry testable. `read_bar_cfg` and `read_bar_geometry` are the two
+  impure helpers and are both skipped under `_G.GOLDENSPIRAL_TEST` (the latter
+  reads `_G.GOLDENSPIRAL_TEST_BAR = {w, h}` instead).
 - Match the existing comment density and style. The header block is the spec;
   update it when behaviour changes, and add a `CHANGELOG.md` entry.
 - Plain ASCII punctuation in prose and comments: no em or en dashes (use `-`,
@@ -46,10 +46,9 @@ hyprctl configerrors        # must be empty
 
 Then open 2, 5, and 10+ windows on a scratch workspace and confirm the C forms,
 the bottom strip wraps, and `SUPER+M` promotes the focused window. With
-`goldenspiral-bar` running, confirm it sits in the bottom-right corner, the
-mainstage and strip stop above it, the left column still reaches the floor,
-closing an app moves its chip to the left zone, and a right-click pick brings a
-window to the mainstage.
+hypr-chronobar running, confirm the mainstage and strip stop above its corner,
+the left column still reaches the floor, closing an app moves its chip to the
+left zone, and a right-click pick brings a window to the mainstage.
 
 ## Attribution
 

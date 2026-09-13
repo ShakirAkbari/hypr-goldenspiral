@@ -230,42 +230,18 @@ do
   L.layout_msg(mctx({ 1 }), "dragsnap")     -- back on for any later runs
 end
 
------------------------------------------------------------------- the pinned app bar
+------------------------------------------------------------------ chronobar's published geometry
 
-local BAR_CLASS = "org.goldenspiral.chronobar"
+local BAR_W = AREA.w * 0.3333
 local BAR_H = 150
 
--- ctx with a chronobar target appended (Hyprland hands it back like any tile).
-local function ctx_bar(ids, active)
-  local c = ctx(ids, active)
-  local i = #c.targets + 1
-  c.targets[i] = {
-    index = i,
-    window = { stable_id = "BAR", class = BAR_CLASS },
-    placed = nil,
-    place = function(self, box) self.placed = box end,
-  }
-  return c
-end
-
--- 11. the bar is pinned to the bottom-right corner at its configured size.
--- Fresh ids 51..55 -> order {55,54,53,52,51}: ranks map 55,54,53,52,51.
+-- 11. the strip runs to the floor beside the bar's published rectangle and
+-- stops above it over the bar; the mainstage lifts above the strip; the
+-- bottom-left box keeps full height. Fresh ids 51..55 -> order
+-- {55,54,53,52,51}: ranks map 55,54,53,52,51.
 do
-  local c = ctx_bar({ 51, 52, 53, 54, 55 }, 55)
-  L.recalculate(c)
-  local b = box_of(c, "BAR")
-  check("bar: placed", b ~= nil)
-  check("bar: width is w_frac of the area", math.abs(b.w - AREA.w * 0.3333) < 2)
-  check("bar: height is h_px", b.h == BAR_H)
-  check("bar: hugs the right edge", math.abs((b.x + b.w) - (AREA.x + AREA.w)) < 1)
-  check("bar: hugs the bottom edge", math.abs((b.y + b.h) - (AREA.y + AREA.h)) < 1)
-end
-
--- 12. the strip runs to the floor beside the bar and stops above it over the
--- bar; the mainstage lifts above the strip; the bottom-left box keeps full
--- height.
-do
-  local c = ctx_bar({ 51, 52, 53, 54, 55 }, 55)
+  _G.GOLDENSPIRAL_TEST_BAR = { w = BAR_W, h = BAR_H }
+  local c = ctx({ 51, 52, 53, 54, 55 }, 55)
   L.recalculate(c)
   local floor = AREA.y + AREA.h
   local main = box_of(c, 55)    -- rank 1
@@ -282,9 +258,11 @@ do
     bl.y + bl.h >= floor - 1)
   check("bar carve: rank 2 is the top-left box (touches the top-left corner)",
     box_of(c, 54).x < 1 and box_of(c, 54).y < 1)
+  _G.GOLDENSPIRAL_TEST_BAR = nil
 end
 
--- 13. no bar target -> the layout still places everything (regression guard)
+-- 12. no published geometry -> the layout still places everything, with no
+-- carve (regression guard)
 do
   local c = ctx({ 51, 52, 53, 54, 55 }, 55)
   L.recalculate(c)
