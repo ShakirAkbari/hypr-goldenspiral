@@ -19,6 +19,11 @@ based on [Keep a Changelog](https://keepachangelog.com/).
   `desc:<substring>`), so it stays visible no matter which workspace you
   switch to there. Empty by default (stays on whatever workspace it mapped on,
   like any other window).
+- `workspace` config key: scopes golden-spiral (and the app bar) to a single
+  workspace via `hl.workspace_rule`, instead of making it the global layout.
+  Every other workspace keeps Hyprland's normal default layout. Empty by
+  default (global, unchanged behavior for existing users); when set, the bar's
+  window rule also pins it there silently.
 - Layout support for the bar: `ranked` sets the bar target aside,
   `bar_geometry(area)` places it in the corner, and the bottom-row strip
   columns over the bar's x-range stop above it while everything else ignores
@@ -44,6 +49,10 @@ based on [Keep a Changelog](https://keepachangelog.com/).
   `0.34`, `min_tile_w` to `0.18`; `top_split` removed.
 - `slots` takes an optional third argument, the app bar footprint
   (`{bar_w, bar_h}`); called with two arguments it behaves exactly as before.
+- "Reset proportions" moved from `SUPER + 0` to `SUPER + R`, freeing `SUPER + 0`
+  (and its shift/alt variants) for Omarchy's default workspace-10 bindings,
+  which it would otherwise silently shadow whenever `workspace` scopes the
+  layout to that key's workspace.
 
 ## [0.2.0] - 2026-09-08
 

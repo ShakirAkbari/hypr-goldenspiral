@@ -23,6 +23,7 @@ _G.hl = {
   config = function() end,
   dsp = { layout = function(s) return { msg = s } end },
   window_rule = function() end,
+  workspace_rule = function() end,
   exec_cmd = function() end,
 }
 _G.o = { bind = function() end }

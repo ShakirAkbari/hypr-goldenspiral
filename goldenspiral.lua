@@ -56,6 +56,13 @@ local state = {
                        -- goes back to the mainstage like any new window
   debug       = false, -- notify on each drop-zone placement
 
+  -- Which workspace golden-spiral is scoped to, or "" (default) to make it
+  -- the global layout on every workspace, as before. Set via `"workspace"` in
+  -- ~/.config/goldenspiral/bar.json. When set, every other workspace keeps
+  -- Hyprland's normal default layout and only this one workspace -- and the
+  -- chronobar app bar -- uses golden-spiral.
+  workspace   = "",
+
   -- The chronobar app bar (bar/chronobar.py). Its window is recognised by
   -- class, pinned to a fixed slot in the bottom-right corner, and kept out of
   -- the C ranking; the other windows lay out around it. w_frac and h_px are
@@ -85,11 +92,15 @@ local function read_bar_cfg()
   f:close()
   local wf = body:match('"barWidthFraction"%s*:%s*([0-9.]+)')
   local hp = body:match('"barHeight"%s*:%s*([0-9]+)')
+  local ws = body:match('"workspace"%s*:%s*"([^"]*)"')
   if wf then
     state.bar.w_frac = math.max(0.15, math.min(0.6, tonumber(wf)))
   end
   if hp then
     state.bar.h_px = math.max(40, tonumber(hp))
+  end
+  if ws then
+    state.workspace = ws
   end
 end
 
@@ -449,12 +460,21 @@ hl.layout.register("goldenspiral", {
   end,
 })
 
--- Make it the active layout.
-hl.config({
-  general = {
-    layout = "lua:goldenspiral",
-  },
-})
+-- Make it the active layout. If `workspace` is set (via
+-- ~/.config/goldenspiral/bar.json), golden-spiral is scoped to that one
+-- workspace only and every other workspace keeps Hyprland's normal default
+-- layout; empty (the default for every other goldenspiral user) makes it
+-- global, as before.
+read_bar_cfg()
+if state.workspace ~= "" then
+  hl.workspace_rule({ workspace = state.workspace, layout = "lua:goldenspiral" })
+else
+  hl.config({
+    general = {
+      layout = "lua:goldenspiral",
+    },
+  })
+end
 
 -- Controls. hl.dsp.layout(msg) sends the string to this layout's layout_msg
 -- (the same path Omarchy uses for hl.dsp.layout("togglesplit")).
@@ -465,17 +485,23 @@ o.bind("SUPER + EQUAL", "Spiral: widen mainstage", hl.dsp.layout("grow"))
 o.bind("SUPER + MINUS", "Spiral: narrow mainstage", hl.dsp.layout("shrink"))
 o.bind("SUPER + BRACKETRIGHT", "Spiral: shrink bottom strip", hl.dsp.layout("taller"))
 o.bind("SUPER + BRACKETLEFT", "Spiral: grow bottom strip", hl.dsp.layout("shorter"))
-o.bind("SUPER + 0", "Spiral: reset proportions", hl.dsp.layout("reset"))
+o.bind("SUPER + R", "Spiral: reset proportions", hl.dsp.layout("reset"))
 
 -- The app bar (bar/chronobar.py). It is a normal tiled window that recalculate
 -- pins to the corner; it must not take focus and wants no chrome of its own.
-hl.window_rule({
+-- When golden-spiral is scoped to one workspace, the bar belongs there too --
+-- pinned silently so mapping it doesn't yank focus to that workspace.
+local bar_rule = {
   match = { class = state.bar.class },
   no_focus = true,
   no_shadow = true,
   border_size = 0,
   rounding = 0,
-})
+}
+if state.workspace ~= "" then
+  bar_rule.workspace = state.workspace .. " silent"
+end
+hl.window_rule(bar_rule)
 
 -- Launch it once at session start. On a setup without hl.on, add instead:
 --   exec-once = goldenspiral-bar
