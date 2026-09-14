@@ -6,6 +6,15 @@ based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- `install.sh` now installs [hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar)
+  as a dependency instead of just pointing at it: clones it into
+  `~/Projects/hypr-chronobar` if missing, updates it if the checked out
+  commit predates `8b8b6e6` (the commit that started publishing
+  `geometry.json`, the only thing this layout reads from it), runs its own
+  `install.sh`, and adds the `qs -c chronobar` autostart line to
+  `~/.config/hypr/autostart.lua` if it's not already there. Idempotent;
+  skipped with a warning if `git` is unavailable or something other than a
+  git checkout already occupies that directory.
 - **App bar cooperation**: the layout carves its bottom-right corner out of
   the work area for [hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar),
   a separate, standalone project you install independently. `recalculate`

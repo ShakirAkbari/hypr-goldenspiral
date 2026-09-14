@@ -53,8 +53,9 @@ With 2-3 windows there's no strip: the mainstage takes the whole right side
 
 It pairs well with a companion **app bar**,
 [hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar): a separate
-project you install on its own. When it's running, goldenspiral automatically
-keeps tiles out of its bottom-right corner. See [App bar](#app-bar) below.
+project, installed as a dependency by this repo's `install.sh` (see Install
+below). When it's running, goldenspiral automatically keeps tiles out of its
+bottom-right corner. See [App bar](#app-bar) below.
 
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the reasoning behind every part of
 this.
@@ -65,9 +66,11 @@ this.
   provides `hl.layout.register` and the `hl` / `o` config globals. This is what
   [Omarchy](https://omarchy.org) ships. A plain `hyprland.conf` setup would need
   the equivalent Lua entrypoint.
-- The layout itself has no dependencies; it's one Lua file. The app bar is a
-  separate install -- see [hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar)
-  for its own requirements.
+- The layout itself has no dependencies; it's one Lua file. `install.sh`
+  installs the app bar, [hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar),
+  as a dependency (see Install below); see that project for its own
+  requirements. `git` is needed for that step; without it, `install.sh` skips
+  the bar and the layout still works fine on its own.
 
 ## Install
 
@@ -78,7 +81,14 @@ cd hypr-goldenspiral
 ```
 
 `install.sh` symlinks `goldenspiral.lua` into `~/.config/hypr/hypr/`. A
-`git pull` then updates it in place.
+`git pull` then updates it in place. It also installs the app bar as a
+dependency: clones [hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar)
+into `~/Projects/hypr-chronobar` (or updates it, if the checked out commit
+predates the geometry.json publishing this layout reads), runs its own
+`install.sh`, and adds `o.exec_on_start("qs -c chronobar")` to
+`~/.config/hypr/autostart.lua` if it's not already there. Safe to re-run.
+Skipped, with a warning, if `git` isn't available or if something other than
+a git checkout already occupies `~/Projects/hypr-chronobar`.
 
 Then require it **after** whatever sets `general:layout`, so it wins:
 
@@ -93,10 +103,9 @@ hyprctl configerrors   # expect no output
 ```
 
 The layout registers itself, sets `general.layout = "lua:goldenspiral"`, and
-binds the controls below. Want the app bar too? Install
-[hypr-chronobar](https://github.com/ShakirAkbari/hypr-chronobar) separately
-(it has its own installer and autostarts itself); goldenspiral needs no
-configuration to cooperate with it, and works identically with it absent.
+binds the controls below. goldenspiral needs no configuration to cooperate
+with the app bar `install.sh` set up above, and works identically with it
+absent (e.g. if `git` wasn't available to install it).
 
 ## Keybinds
 
